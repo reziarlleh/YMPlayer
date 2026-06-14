@@ -15,5 +15,7 @@ local.properties
 # Codex/runtime attachments and transient files
 .codex-remote-attachments/
 
-# APKs are published as GitHub Release assets, not committed to git history.
+# Local APK build output stays ignored, but archived working builds under
+# releases/<version>/ are intentionally committed for this private repo.
 *.apk
+!releases/**/*.apk

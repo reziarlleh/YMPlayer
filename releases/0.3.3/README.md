@@ -1,14 +1,16 @@
 # YMPlayer 0.3.3
 
-Working debug build archived for real-device testing.
+Рабочая debug-сборка для тестирования на реальном устройстве.
 
-- APK: `YMPlayer-v0.3.3-debug-b33.apk`
-- Built from app version `0.3.3`, versionCode `33`.
-- See `CHANGELOG.md` for user-facing changes.
+- APK в репозитории: `YMPlayer-v0.3.3-debug-b33.apk`
+- APK в GitHub Release: https://github.com/reziarlleh/YMPlayer/releases/download/v0.3.3/YMPlayer-v0.3.3-debug-b33.apk
+- Версия приложения: `0.3.3`
+- `versionCode`: `33`
+- Основной список изменений: `CHANGELOG.md`
 
-Main focus:
+Главный фокус версии:
 
-- Real Yandex Music search from the Library page.
-- Track result playback.
-- Album result playback.
-- Artist top-track playback.
+- Реальный поиск по Яндекс Музыке со страницы библиотеки.
+- Воспроизведение найденного трека.
+- Воспроизведение найденного альбома.
+- Воспроизведение популярных треков найденного артиста.
