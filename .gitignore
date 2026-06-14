@@ -1,0 +1,19 @@
+# Gradle / Android build output
+.gradle/
+build/
+app/build/
+
+# Local machine and IDE state
+local.properties
+.idea/
+*.iml
+
+# Native and generated artifacts
+.cxx/
+.externalNativeBuild/
+
+# Codex/runtime attachments and transient files
+.codex-remote-attachments/
+
+# APKs are published as GitHub Release assets, not committed to git history.
+*.apk

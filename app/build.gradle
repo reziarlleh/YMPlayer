@@ -1,0 +1,31 @@
+plugins {
+    id "com.android.application"
+}
+
+android {
+    namespace "dev.petrov.yaplay"
+    compileSdk 35
+
+    defaultConfig {
+        applicationId "dev.petrov.yaplay"
+        minSdk 29
+        targetSdk 35
+        versionCode 33
+        versionName "0.3.3"
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    applicationVariants.configureEach { variant ->
+        variant.outputs.configureEach {
+            outputFileName = "YMPlayer-v${variant.versionName}-${variant.name}-b${variant.versionCode}.apk"
+        }
+    }
+}
+
+dependencies {
+    implementation "net.jthink:jaudiotagger:3.0.1"
+}
