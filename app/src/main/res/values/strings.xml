@@ -6,6 +6,7 @@
     <string name="section_status">Status</string>
     <string name="section_account">Yandex account</string>
     <string name="section_cache">Cache</string>
+    <string name="section_audio_quality">Audio quality</string>
     <string name="section_integrations">Integrations</string>
     <string name="section_diagnostics">Diagnostics</string>
     <string name="now_playing_empty">Nothing is playing</string>
@@ -161,6 +162,7 @@
     <string name="auto_cache_liked_tracks">Automatically download liked tracks to local cache</string>
     <string name="stream_quality_template">Online quality: %1$s</string>
     <string name="cache_quality_template">Cache quality: %1$s</string>
+    <string name="audio_quality_hint">Tap a quality button to switch profile. Existing cached files keep their old quality until cache refresh.</string>
     <string name="stream_quality_saved">Online quality: %1$s. New playback-cache downloads will use it.</string>
     <string name="cache_quality_saved">Cache quality: %1$s. Already downloaded liked tracks stay unchanged until cache refresh.</string>
     <string name="quality_auto">Auto</string>

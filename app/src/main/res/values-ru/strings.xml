@@ -6,6 +6,7 @@
     <string name="section_status">Состояние</string>
     <string name="section_account">Аккаунт Яндекса</string>
     <string name="section_cache">Кэш</string>
+    <string name="section_audio_quality">Качество звука</string>
     <string name="section_diagnostics">Диагностика</string>
     <string name="now_playing_empty">Ничего не играет</string>
     <string name="queue_empty">Очередь пуста</string>
@@ -151,6 +152,7 @@
     <string name="auto_cache_liked_tracks">Автоматически скачивать понравившиеся треки в локальный кэш</string>
     <string name="stream_quality_template">Качество онлайн: %1$s</string>
     <string name="cache_quality_template">Качество кэша: %1$s</string>
+    <string name="audio_quality_hint">Нажимайте на кнопку качества, чтобы переключать профиль. Уже скачанные файлы сохраняют старое качество до очистки или повторной синхронизации кэша.</string>
     <string name="stream_quality_saved">Качество онлайн: %1$s. Настройка применится к новым загрузкам временного кэша.</string>
     <string name="cache_quality_saved">Качество кэша: %1$s. Уже скачанные избранные треки не изменятся до очистки или повторной синхронизации.</string>
     <string name="quality_auto">Авто</string>

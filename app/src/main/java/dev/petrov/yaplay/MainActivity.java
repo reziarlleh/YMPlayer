@@ -2022,6 +2022,7 @@ public class MainActivity extends Activity {
         close.setOnClickListener(v -> dialog.dismiss());
         top.addView(close, compactButtonParams(dp(110)));
 
+        addQualitySettings(root);
         addAccountSettings(root);
         addCacheSettings(root);
         addIntegrationSettings(root);
@@ -2043,6 +2044,24 @@ public class MainActivity extends Activity {
             }
         });
         dialog.show();
+    }
+
+    private void addQualitySettings(LinearLayout root) {
+        addSection(root, R.string.section_audio_quality);
+        TextView hint = new TextView(this);
+        hint.setText(R.string.audio_quality_hint);
+        hint.setTextColor(COLOR_MUTED);
+        hint.setTextSize(14);
+        hint.setLineSpacing(dp(2), 1f);
+        root.addView(hint, spaced());
+
+        streamQualityButton = pillButton(streamQualityText(), COLOR_ACCENT, COLOR_BG);
+        streamQualityButton.setOnClickListener(v -> cycleStreamQuality());
+        root.addView(streamQualityButton, rowButtonParams());
+
+        cacheQualityButton = pillButton(cacheQualityText(), COLOR_ACCENT_2, COLOR_BG);
+        cacheQualityButton.setOnClickListener(v -> cycleCacheQuality());
+        root.addView(cacheQualityButton, rowButtonParams());
     }
 
     private void addAccountSettings(LinearLayout root) {
@@ -2114,14 +2133,6 @@ public class MainActivity extends Activity {
             updateStatus(statusWithCache(isChecked ? "Auto-cache liked tracks enabled" : "Auto-cache liked tracks disabled"));
         });
         root.addView(autoCacheLikedBox, spaced());
-
-        streamQualityButton = pillButton(streamQualityText(), COLOR_SURFACE_2, COLOR_TEXT);
-        streamQualityButton.setOnClickListener(v -> cycleStreamQuality());
-        root.addView(streamQualityButton, rowButtonParams());
-
-        cacheQualityButton = pillButton(cacheQualityText(), COLOR_SURFACE_2, COLOR_TEXT);
-        cacheQualityButton.setOnClickListener(v -> cycleCacheQuality());
-        root.addView(cacheQualityButton, rowButtonParams());
 
         addButton(root, R.string.sync_favorite_tracks, v -> startFavoritesCacheSync());
         addButton(root, R.string.cancel_cache_sync, v -> cancelCacheSync());

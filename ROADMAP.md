@@ -80,7 +80,14 @@
 - Added separate quality profiles for online playback and permanent liked-track
   cache downloads.
 
-## Planned 0.3.x Features
+## Completed In 0.4.0
+
+- Promoted the app to the 0.4 line after substantial player, library, search,
+  local playlist, My Wave, and cache-quality work.
+- Moved audio quality controls to a dedicated top-level settings section.
+- Made online and permanent cache quality selection visually prominent.
+
+## Planned 0.4.x Features
 
 - Improve local playlist management with optional folder diff details and
   better large-playlist editing ergonomics.

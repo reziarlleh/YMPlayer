@@ -13,11 +13,11 @@ YMPlayer - неофициальный плеер Яндекс Музыки дл�
 
 ## Скачать
 
-Текущая рабочая сборка: **0.3.7**, `versionCode 37`.
+Текущая рабочая сборка: **0.4.0**, `versionCode 40`.
 
-- GitHub Release: [YMPlayer 0.3.7](https://github.com/reziarlleh/YMPlayer/releases/tag/v0.3.7)
-- APK в репозитории: [releases/0.3.7/YMPlayer-v0.3.7-debug-b37.apk](releases/0.3.7/YMPlayer-v0.3.7-debug-b37.apk)
-- Прямая ссылка на APK из релиза: [YMPlayer-v0.3.7-debug-b37.apk](https://github.com/reziarlleh/YMPlayer/releases/download/v0.3.7/YMPlayer-v0.3.7-debug-b37.apk)
+- GitHub Release: [YMPlayer 0.4.0](https://github.com/reziarlleh/YMPlayer/releases/tag/v0.4.0)
+- APK в репозитории: [releases/0.4.0/YMPlayer-v0.4.0-debug-b40.apk](releases/0.4.0/YMPlayer-v0.4.0-debug-b40.apk)
+- Прямая ссылка на APK из релиза: [YMPlayer-v0.4.0-debug-b40.apk](https://github.com/reziarlleh/YMPlayer/releases/download/v0.4.0/YMPlayer-v0.4.0-debug-b40.apk)
 
 Путь `app/build/outputs/apk/debug/...` появляется только после локальной сборки
 через Gradle и не является файлом в GitHub-репозитории.
@@ -36,7 +36,8 @@ YMPlayer - неофициальный плеер Яндекс Музыки дл�
 - Постоянное хранение только глобального раздела "Мне нравится"; нелайкнутые
   треки используют только ограниченный временный кэш воспроизведения.
 - Раздельный выбор качества для онлайн-воспроизведения и постоянного кэша
-  избранных треков: авто/максимум, эконом 128, стандарт 192, высокое 320.
+  избранных треков в отдельном верхнем разделе настроек: авто/максимум,
+  эконом 128, стандарт 192, высокое 320.
 - Синхронизация избранного в локальный кэш с опциями "только Wi-Fi" и "только
   на зарядке".
 - Кнопка очистки локального кэша.

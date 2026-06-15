@@ -3,6 +3,20 @@
 This file tracks only working, testable versions. Broken or experimental
 intermediate builds should not be added here.
 
+## 0.4.0 - 2026-06-15
+
+Visible audio quality settings and milestone bump.
+
+- Promoted YMPlayer to 0.4.0 after the accumulated player, search, local
+  playlist, My Wave, and cache-quality changes became substantial enough for a
+  minor-version milestone.
+- Moved audio quality controls into a dedicated `Audio quality` settings
+  section near the top of the settings dialog.
+- Made online and permanent-cache quality controls more visible with separate
+  accent-colored full-width buttons.
+- Added an explanatory hint that changed quality applies to new downloads, while
+  existing cached files keep their current media quality until cache refresh.
+
 ## 0.3.7 - 2026-06-15
 
 My Wave startup and audio quality controls.
