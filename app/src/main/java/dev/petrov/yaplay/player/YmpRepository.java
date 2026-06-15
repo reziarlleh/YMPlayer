@@ -4,6 +4,7 @@ import android.content.Context;
 import android.net.Uri;
 import android.os.ParcelFileDescriptor;
 
+import java.io.IOException;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -243,11 +244,46 @@ public final class YmpRepository {
         return deleted;
     }
 
+    public synchronized LocalPlaylistStore.LocalPlaylist renameLocalPlaylist(String playlistId, String title) {
+        LocalPlaylistStore.LocalPlaylist playlist = localPlaylists.rename(playlistId, title);
+        Diagnostics.log(context, "YMP local playlist rename requested: playlist="
+                + playlistId + ", renamed=" + (playlist != null));
+        return playlist;
+    }
+
     public synchronized boolean clearLocalPlaylist(String playlistId) {
         boolean cleared = localPlaylists.clear(playlistId);
         Diagnostics.log(context, "YMP local playlist clear requested: playlist="
                 + playlistId + ", cleared=" + cleared);
         return cleared;
+    }
+
+    public synchronized LocalPlaylistStore.LocalPlaylist addLocalFolderTracks(
+            String playlistId,
+            Uri treeUri,
+            List<LocalPlaylistStore.LocalTrack> tracks
+    ) {
+        LocalPlaylistStore.LocalPlaylist playlist = localPlaylists.addFolderTracks(playlistId, treeUri, tracks);
+        Diagnostics.log(context, "YMP local folder tracks added: playlist="
+                + playlistId + ", folder=" + treeUri + ", tracks=" + (tracks == null ? 0 : tracks.size()));
+        return playlist;
+    }
+
+    public synchronized LocalPlaylistStore.RefreshResult refreshLocalPlaylistFolders(String playlistId) throws IOException {
+        LocalPlaylistStore.RefreshResult result = localPlaylists.refreshFolders(playlistId);
+        Diagnostics.log(context, "YMP local playlist folders refreshed: playlist="
+                + playlistId
+                + ", folders=" + result.folderCount
+                + ", tracks=" + result.trackCount
+                + ", failed=" + result.failedFolders);
+        return result;
+    }
+
+    public synchronized boolean removeLocalPlaylistTrack(String playlistId, String trackKeyOrUri) {
+        boolean removed = localPlaylists.removeTrack(playlistId, trackKeyOrUri);
+        Diagnostics.log(context, "YMP local playlist track remove requested: playlist="
+                + playlistId + ", track=" + trackKeyOrUri + ", removed=" + removed);
+        return removed;
     }
 
     public synchronized boolean isLocalFavorite(YandexMusicClient.Track track) {

@@ -3,6 +3,18 @@
 This file tracks only working, testable versions. Broken or experimental
 intermediate builds should not be added here.
 
+## 0.3.4 - 2026-06-15
+
+Local playlist management polish.
+
+- Added local playlist rename from the Library screen.
+- Added a local track list dialog with per-track removal.
+- Removed local folder tracks are now remembered as exclusions so they do not
+  reappear after folder refresh.
+- Folder imports now store their source folder URI for future refreshes.
+- Added refresh for imported local folders.
+- Local playlist rows now show both track count and imported folder count.
+
 ## 0.3.3 - 2026-06-14
 
 Search playback foundation.

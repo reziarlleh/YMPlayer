@@ -71,6 +71,36 @@ public final class LocalPlaylistStore {
         return playlist;
     }
 
+    public synchronized LocalPlaylist rename(String playlistId, String title) {
+        if (playlistId == null || playlistId.isEmpty() || isLocalFavoritesId(playlistId)) {
+            return null;
+        }
+        String safeTitle = title == null ? "" : title.trim();
+        if (safeTitle.isEmpty()) {
+            return null;
+        }
+        List<LocalPlaylist> playlists = readAll();
+        LocalPlaylist updated = null;
+        for (int i = 0; i < playlists.size(); i++) {
+            LocalPlaylist playlist = playlists.get(i);
+            if (playlistId.equals(playlist.id)) {
+                updated = new LocalPlaylist(
+                        playlist.id,
+                        safeTitle,
+                        playlist.tracks,
+                        playlist.folderUris,
+                        playlist.excludedTrackUris
+                );
+                playlists.set(i, updated);
+                break;
+            }
+        }
+        if (updated != null) {
+            writeAll(playlists);
+        }
+        return updated;
+    }
+
     public synchronized LocalPlaylist addTracks(String playlistId, List<LocalTrack> tracks) {
         List<LocalPlaylist> playlists = withSystemPlaylists(readAll());
         LocalPlaylist updated = null;
@@ -90,7 +120,19 @@ public final class LocalPlaylistStore {
                     }
                 }
             }
-            updated = new LocalPlaylist(playlist.id, playlist.title, new ArrayList<>(unique.values()));
+            List<String> excluded = new ArrayList<>(playlist.excludedTrackUris);
+            if (tracks != null) {
+                for (LocalTrack track : tracks) {
+                    excluded.remove(track.uri);
+                }
+            }
+            updated = new LocalPlaylist(
+                    playlist.id,
+                    playlist.title,
+                    new ArrayList<>(unique.values()),
+                    playlist.folderUris,
+                    excluded
+            );
             playlists.set(i, updated);
             break;
         }
@@ -98,6 +140,137 @@ public final class LocalPlaylistStore {
             writeAll(playlists);
         }
         return updated;
+    }
+
+    public synchronized LocalPlaylist addFolderTracks(String playlistId, Uri treeUri, List<LocalTrack> tracks) {
+        String folderUri = treeUri == null ? "" : treeUri.toString();
+        if (folderUri.isEmpty()) {
+            return addTracks(playlistId, tracks);
+        }
+        List<LocalPlaylist> playlists = withSystemPlaylists(readAll());
+        LocalPlaylist updated = null;
+        for (int i = 0; i < playlists.size(); i++) {
+            LocalPlaylist playlist = playlists.get(i);
+            if (!playlist.id.equals(playlistId)) {
+                continue;
+            }
+            List<String> folders = uniqueStrings(playlist.folderUris);
+            if (!folders.contains(folderUri)) {
+                folders.add(folderUri);
+            }
+            Map<String, LocalTrack> unique = new LinkedHashMap<>();
+            for (LocalTrack track : playlist.tracks) {
+                unique.put(track.uri, track);
+            }
+            for (LocalTrack track : tagSource(tracks, folderUri)) {
+                if (track.isPlayable() && !playlist.excludedTrackUris.contains(track.uri)) {
+                    unique.put(track.uri, track);
+                }
+            }
+            updated = new LocalPlaylist(
+                    playlist.id,
+                    playlist.title,
+                    new ArrayList<>(unique.values()),
+                    folders,
+                    playlist.excludedTrackUris
+            );
+            playlists.set(i, updated);
+            break;
+        }
+        if (updated != null) {
+            writeAll(playlists);
+        }
+        return updated;
+    }
+
+    public synchronized RefreshResult refreshFolders(String playlistId) {
+        if (playlistId == null || playlistId.isEmpty() || isLocalFavoritesId(playlistId)) {
+            return RefreshResult.empty(playlistId);
+        }
+        List<LocalPlaylist> playlists = readAll();
+        for (int i = 0; i < playlists.size(); i++) {
+            LocalPlaylist playlist = playlists.get(i);
+            if (!playlistId.equals(playlist.id)) {
+                continue;
+            }
+            List<String> folders = uniqueStrings(playlist.folderUris);
+            if (folders.isEmpty()) {
+                return new RefreshResult(playlist.id, playlist.title, 0, playlist.trackCount(), 0, playlist);
+            }
+
+            Map<String, LocalTrack> unique = new LinkedHashMap<>();
+            for (LocalTrack track : playlist.tracks) {
+                if (track.sourceTreeUri.isEmpty() || !folders.contains(track.sourceTreeUri)) {
+                    unique.put(track.uri, track);
+                }
+            }
+
+            int failed = 0;
+            for (String folder : folders) {
+                try {
+                    List<LocalTrack> scanned = tracksFromTree(context, Uri.parse(folder));
+                    for (LocalTrack track : tagSource(scanned, folder)) {
+                        if (track.isPlayable() && !playlist.excludedTrackUris.contains(track.uri)) {
+                            unique.put(track.uri, track);
+                        }
+                    }
+                } catch (Exception ex) {
+                    failed++;
+                    Diagnostics.log(context, "YMP local folder refresh failed: " + folder, ex);
+                }
+            }
+
+            LocalPlaylist updated = new LocalPlaylist(
+                    playlist.id,
+                    playlist.title,
+                    new ArrayList<>(unique.values()),
+                    folders,
+                    playlist.excludedTrackUris
+            );
+            playlists.set(i, updated);
+            writeAll(playlists);
+            return new RefreshResult(updated.id, updated.title, folders.size(), updated.trackCount(), failed, updated);
+        }
+        return RefreshResult.empty(playlistId);
+    }
+
+    public synchronized boolean removeTrack(String playlistId, String trackKeyOrUri) {
+        String uri = uriString(trackKeyOrUri);
+        if (playlistId == null || playlistId.isEmpty() || uri.isEmpty()) {
+            return false;
+        }
+        List<LocalPlaylist> playlists = withSystemPlaylists(readAll());
+        boolean changed = false;
+        for (int i = 0; i < playlists.size(); i++) {
+            LocalPlaylist playlist = playlists.get(i);
+            if (!playlistId.equals(playlist.id)) {
+                continue;
+            }
+            List<LocalTrack> tracks = new ArrayList<>();
+            List<String> excluded = new ArrayList<>(playlist.excludedTrackUris);
+            for (LocalTrack track : playlist.tracks) {
+                if (uri.equals(track.uri)) {
+                    changed = true;
+                    if (!track.sourceTreeUri.isEmpty() && !excluded.contains(track.uri)) {
+                        excluded.add(track.uri);
+                    }
+                } else {
+                    tracks.add(track);
+                }
+            }
+            playlists.set(i, new LocalPlaylist(
+                    playlist.id,
+                    playlist.title,
+                    tracks,
+                    playlist.folderUris,
+                    excluded
+            ));
+            break;
+        }
+        if (changed) {
+            writeAll(playlists);
+        }
+        return changed;
     }
 
     public synchronized boolean delete(String playlistId) {
@@ -303,7 +476,7 @@ public final class LocalPlaylistStore {
         }
         try {
             String rootDocumentId = DocumentsContract.getTreeDocumentId(treeUri);
-            collectTree(context, treeUri, rootDocumentId, tracks, 0);
+            collectTree(context, treeUri, treeUri.toString(), rootDocumentId, tracks, 0);
         } catch (Exception ex) {
             throw new IOException("Unable to scan selected folder", ex);
         }
@@ -332,6 +505,7 @@ public final class LocalPlaylistStore {
     private static void collectTree(
             Context context,
             Uri treeUri,
+            String sourceTreeUri,
             String documentId,
             List<LocalTrack> tracks,
             int depth
@@ -361,10 +535,10 @@ public final class LocalPlaylistStore {
                 String mime = mimeIndex < 0 ? "" : cursor.getString(mimeIndex);
                 long size = sizeIndex < 0 || cursor.isNull(sizeIndex) ? 0L : cursor.getLong(sizeIndex);
                 if (DocumentsContract.Document.MIME_TYPE_DIR.equals(mime)) {
-                    collectTree(context, treeUri, childId, tracks, depth + 1);
+                    collectTree(context, treeUri, sourceTreeUri, childId, tracks, depth + 1);
                 } else if (isAudio(name, mime)) {
                     Uri documentUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, childId);
-                    tracks.add(trackFromUri(context, documentUri, name, mime, size));
+                    tracks.add(trackFromUri(context, documentUri, name, mime, size, sourceTreeUri));
                 }
             }
         } catch (Exception ex) {
@@ -399,10 +573,10 @@ public final class LocalPlaylistStore {
         if (!isAudio(name, mime)) {
             return null;
         }
-        return trackFromUri(context, uri, name, mime, size);
+        return trackFromUri(context, uri, name, mime, size, "");
     }
 
-    private static LocalTrack trackFromUri(Context context, Uri uri, String name, String mime, long size) {
+    private static LocalTrack trackFromUri(Context context, Uri uri, String name, String mime, long size, String sourceTreeUri) {
         Metadata metadata = readMetadata(context, uri);
         String fallbackTitle = cleanTitle(name, uri);
         return new LocalTrack(
@@ -412,7 +586,8 @@ public final class LocalPlaylistStore {
                 metadata.album,
                 mime,
                 size,
-                metadata.durationMs
+                metadata.durationMs,
+                sourceTreeUri
         );
     }
 
@@ -497,6 +672,45 @@ public final class LocalPlaylistStore {
         return "";
     }
 
+    private static List<LocalTrack> tagSource(List<LocalTrack> tracks, String sourceTreeUri) {
+        List<LocalTrack> tagged = new ArrayList<>();
+        if (tracks == null) {
+            return tagged;
+        }
+        for (LocalTrack track : tracks) {
+            if (track == null || !track.isPlayable()) {
+                continue;
+            }
+            tagged.add(track.sourceTreeUri.isEmpty()
+                    ? new LocalTrack(
+                            track.uri,
+                            track.title,
+                            track.artist,
+                            track.album,
+                            track.mime,
+                            track.size,
+                            track.durationMs,
+                            sourceTreeUri
+                    )
+                    : track);
+        }
+        return tagged;
+    }
+
+    private static List<String> uniqueStrings(List<String> values) {
+        List<String> unique = new ArrayList<>();
+        if (values == null) {
+            return unique;
+        }
+        for (String value : values) {
+            String safe = value == null ? "" : value.trim();
+            if (!safe.isEmpty() && !unique.contains(safe)) {
+                unique.add(safe);
+            }
+        }
+        return unique;
+    }
+
     private static final class Metadata {
         final String title;
         final String artist;
@@ -515,20 +729,40 @@ public final class LocalPlaylistStore {
         public final String id;
         public final String title;
         public final List<LocalTrack> tracks;
+        public final List<String> folderUris;
+        public final List<String> excludedTrackUris;
 
         LocalPlaylist(String id, String title, List<LocalTrack> tracks) {
+            this(id, title, tracks, new ArrayList<>(), new ArrayList<>());
+        }
+
+        LocalPlaylist(
+                String id,
+                String title,
+                List<LocalTrack> tracks,
+                List<String> folderUris,
+                List<String> excludedTrackUris
+        ) {
             this.id = id == null ? "" : id;
             this.title = title == null ? "" : title;
             this.tracks = tracks == null ? new ArrayList<>() : tracks;
+            this.folderUris = uniqueStrings(folderUris);
+            this.excludedTrackUris = uniqueStrings(excludedTrackUris);
         }
 
         public int trackCount() {
             return tracks.size();
         }
 
+        public int folderCount() {
+            return folderUris.size();
+        }
+
         JSONObject toJson() {
             JSONObject object = new JSONObject();
             JSONArray array = new JSONArray();
+            JSONArray folders = new JSONArray();
+            JSONArray excluded = new JSONArray();
             try {
                 object.put("id", id);
                 object.put("title", title);
@@ -536,6 +770,14 @@ public final class LocalPlaylistStore {
                     array.put(track.toJson());
                 }
                 object.put("tracks", array);
+                for (String folderUri : folderUris) {
+                    folders.put(folderUri);
+                }
+                object.put("folders", folders);
+                for (String uri : excludedTrackUris) {
+                    excluded.put(uri);
+                }
+                object.put("excludedTrackUris", excluded);
             } catch (JSONException ignored) {
             }
             return object;
@@ -551,6 +793,8 @@ public final class LocalPlaylistStore {
                 return null;
             }
             List<LocalTrack> tracks = new ArrayList<>();
+            List<String> folders = new ArrayList<>();
+            List<String> excluded = new ArrayList<>();
             JSONArray array = object.optJSONArray("tracks");
             if (array != null) {
                 for (int i = 0; i < array.length(); i++) {
@@ -560,7 +804,19 @@ public final class LocalPlaylistStore {
                     }
                 }
             }
-            return new LocalPlaylist(id, title, tracks);
+            JSONArray folderArray = object.optJSONArray("folders");
+            if (folderArray != null) {
+                for (int i = 0; i < folderArray.length(); i++) {
+                    folders.add(folderArray.optString(i, ""));
+                }
+            }
+            JSONArray excludedArray = object.optJSONArray("excludedTrackUris");
+            if (excludedArray != null) {
+                for (int i = 0; i < excludedArray.length(); i++) {
+                    excluded.add(excludedArray.optString(i, ""));
+                }
+            }
+            return new LocalPlaylist(id, title, tracks, folders, excluded);
         }
     }
 
@@ -572,8 +828,22 @@ public final class LocalPlaylistStore {
         public final String mime;
         public final long size;
         public final long durationMs;
+        public final String sourceTreeUri;
 
         LocalTrack(String uri, String title, String artist, String album, String mime, long size, long durationMs) {
+            this(uri, title, artist, album, mime, size, durationMs, "");
+        }
+
+        LocalTrack(
+                String uri,
+                String title,
+                String artist,
+                String album,
+                String mime,
+                long size,
+                long durationMs,
+                String sourceTreeUri
+        ) {
             this.uri = uri == null ? "" : uri;
             this.title = title == null || title.trim().isEmpty() ? "Local track" : title.trim();
             this.artist = artist == null ? "" : artist.trim();
@@ -581,6 +851,7 @@ public final class LocalPlaylistStore {
             this.mime = mime == null ? "" : mime;
             this.size = Math.max(0L, size);
             this.durationMs = Math.max(0L, durationMs);
+            this.sourceTreeUri = sourceTreeUri == null ? "" : sourceTreeUri.trim();
         }
 
         boolean isPlayable() {
@@ -597,6 +868,7 @@ public final class LocalPlaylistStore {
                 object.put("mime", mime);
                 object.put("size", size);
                 object.put("durationMs", durationMs);
+                object.put("sourceTreeUri", sourceTreeUri);
             } catch (JSONException ignored) {
             }
             return object;
@@ -613,8 +885,38 @@ public final class LocalPlaylistStore {
                     object.optString("album", ""),
                     object.optString("mime", ""),
                     object.optLong("size", 0L),
-                    object.optLong("durationMs", 0L)
+                    object.optLong("durationMs", 0L),
+                    object.optString("sourceTreeUri", "")
             );
+        }
+    }
+
+    public static final class RefreshResult {
+        public final String playlistId;
+        public final String playlistTitle;
+        public final int folderCount;
+        public final int trackCount;
+        public final int failedFolders;
+        public final LocalPlaylist playlist;
+
+        RefreshResult(
+                String playlistId,
+                String playlistTitle,
+                int folderCount,
+                int trackCount,
+                int failedFolders,
+                LocalPlaylist playlist
+        ) {
+            this.playlistId = playlistId == null ? "" : playlistId;
+            this.playlistTitle = playlistTitle == null ? "" : playlistTitle;
+            this.folderCount = Math.max(0, folderCount);
+            this.trackCount = Math.max(0, trackCount);
+            this.failedFolders = Math.max(0, failedFolders);
+            this.playlist = playlist;
+        }
+
+        static RefreshResult empty(String playlistId) {
+            return new RefreshResult(playlistId, "", 0, 0, 0, null);
         }
     }
 }

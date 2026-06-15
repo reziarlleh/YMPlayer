@@ -539,7 +539,7 @@ public class MainActivity extends Activity {
         item.addView(title, matchWrap());
 
         TextView subtitle = new TextView(this);
-        subtitle.setText(getString(R.string.playlist_track_count, playlist.trackCount()));
+        subtitle.setText(localPlaylistSubtitle(playlist));
         subtitle.setTextColor(COLOR_MUTED);
         subtitle.setTextSize(13);
         item.addView(subtitle, matchWrap());
@@ -558,17 +558,41 @@ public class MainActivity extends Activity {
         actions.addView(play, rowButtonParams(1f));
 
         if (LocalPlaylistStore.isLocalFavoritesId(playlist.id)) {
+            Button tracks = smallButton(getString(R.string.playlist_tracks), COLOR_SURFACE_2, COLOR_TEXT);
+            tracks.setOnClickListener(v -> showLocalPlaylistTracksDialog(playlist));
+            actions.addView(tracks, rowButtonParams(1f));
+
             Button clear = smallButton(getString(R.string.clear_playlist), COLOR_DANGER, COLOR_TEXT);
             clear.setOnClickListener(v -> confirmClearLocalPlaylist(playlist, null));
             actions.addView(clear, rowButtonParams(1f));
         } else {
+            Button tracks = smallButton(getString(R.string.playlist_tracks), COLOR_SURFACE_2, COLOR_TEXT);
+            tracks.setOnClickListener(v -> showLocalPlaylistTracksDialog(playlist));
+            actions.addView(tracks, rowButtonParams(1f));
+
+            Button rename = smallButton(getString(R.string.rename_playlist), COLOR_SURFACE_2, COLOR_TEXT);
+            rename.setOnClickListener(v -> showRenameLocalPlaylistDialog(playlist));
+            LinearLayout.LayoutParams renameParams = matchWrap();
+            renameParams.setMargins(0, dp(8), 0, 0);
+            item.addView(rename, renameParams);
+
+            LinearLayout importActions = row();
+            importActions.setGravity(Gravity.CENTER_VERTICAL);
+            LinearLayout.LayoutParams importParams = matchWrap();
+            importParams.setMargins(0, dp(8), 0, 0);
+            item.addView(importActions, importParams);
+
             Button files = smallButton(getString(R.string.add_local_files), COLOR_SURFACE_2, COLOR_TEXT);
             files.setOnClickListener(v -> openLocalFilesPicker(playlist.id));
-            actions.addView(files, rowButtonParams(1f));
+            importActions.addView(files, rowButtonParams(1f));
 
             Button folder = smallButton(getString(R.string.add_local_folder), COLOR_SURFACE_2, COLOR_TEXT);
             folder.setOnClickListener(v -> openLocalFolderPicker(playlist.id));
-            actions.addView(folder, rowButtonParams(1f));
+            importActions.addView(folder, rowButtonParams(1f));
+
+            Button refresh = smallButton(getString(R.string.refresh_folders), COLOR_SURFACE_2, COLOR_TEXT);
+            refresh.setOnClickListener(v -> refreshLocalPlaylistFolders(playlist));
+            importActions.addView(refresh, rowButtonParams(1f));
 
             Button delete = smallButton(getString(R.string.delete_playlist), COLOR_DANGER, COLOR_TEXT);
             delete.setOnClickListener(v -> confirmDeleteLocalPlaylist(playlist, null));
@@ -578,6 +602,13 @@ public class MainActivity extends Activity {
         }
 
         root.addView(item, spaced());
+    }
+
+    private String localPlaylistSubtitle(LocalPlaylistStore.LocalPlaylist playlist) {
+        if (playlist == null || playlist.folderCount() <= 0) {
+            return getString(R.string.playlist_track_count, playlist == null ? 0 : playlist.trackCount());
+        }
+        return getString(R.string.local_playlist_subtitle_with_folders, playlist.trackCount(), playlist.folderCount());
     }
 
     private void addPlaylistRow(LinearLayout root, YandexMusicClient.PlaylistSummary playlist) {
@@ -689,6 +720,203 @@ public class MainActivity extends Activity {
         if (afterStarted != null) {
             afterStarted.run();
         }
+    }
+
+    private void showRenameLocalPlaylistDialog(LocalPlaylistStore.LocalPlaylist playlist) {
+        if (playlist == null || LocalPlaylistStore.isLocalFavoritesId(playlist.id)) {
+            return;
+        }
+        Dialog dialog = new Dialog(this);
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+        LinearLayout root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setPadding(dp(18), dp(16), dp(18), dp(18));
+        root.setBackgroundColor(COLOR_BG);
+        root.addView(sectionTitle(getString(R.string.rename_playlist)), matchWrap());
+
+        EditText title = new EditText(this);
+        title.setHint(R.string.local_playlist_name_hint);
+        title.setSingleLine(true);
+        title.setText(playlist.title);
+        title.setSelectAllOnFocus(true);
+        title.setTextColor(COLOR_TEXT);
+        title.setHintTextColor(COLOR_MUTED);
+        title.setBackground(panelBg(COLOR_SURFACE_2, dp(10), COLOR_STROKE));
+        title.setPadding(dp(12), 0, dp(12), 0);
+        root.addView(title, spaced());
+
+        Button save = controlButton(getString(R.string.rename_playlist), COLOR_ACCENT, COLOR_BG, 52);
+        save.setOnClickListener(v -> {
+            String newTitle = title.getText().toString().trim();
+            LocalPlaylistStore.LocalPlaylist updated = new YmpRepository(this)
+                    .renameLocalPlaylist(playlist.id, newTitle);
+            if (updated != null) {
+                if (selectedSourceType == YmpPlaybackService.SOURCE_LOCAL_PLAYLIST
+                        && selectedLocalPlaylistId.equals(updated.id)) {
+                    selectedLocalPlaylistTitle = updated.title;
+                    updateSourceButtons();
+                }
+                loadLocalPlaylists();
+                updateLibraryStatus(getString(R.string.local_playlist_renamed, updated.title));
+                dialog.dismiss();
+            } else {
+                updateLibraryStatus(getString(R.string.local_playlist_rename_failed, playlist.title));
+            }
+        });
+        root.addView(save, spaced());
+
+        dialog.setContentView(root);
+        prepareDialogWindow(dialog, 520);
+        dialog.show();
+    }
+
+    private void refreshLocalPlaylistFolders(LocalPlaylistStore.LocalPlaylist playlist) {
+        if (playlist == null || LocalPlaylistStore.isLocalFavoritesId(playlist.id)) {
+            return;
+        }
+        if (playlist.folderCount() <= 0) {
+            updateLibraryStatus(getString(R.string.local_playlist_no_folders, playlist.title));
+            return;
+        }
+        updateLibraryStatus(getString(R.string.local_playlist_refresh_started, playlist.title));
+        Context appContext = getApplicationContext();
+        new Thread(() -> {
+            try {
+                LocalPlaylistStore.RefreshResult result = new YmpRepository(appContext)
+                        .refreshLocalPlaylistFolders(playlist.id);
+                runOnUiThread(() -> {
+                    loadLocalPlaylists();
+                    updateLibraryStatus(getString(
+                            R.string.local_playlist_refreshed,
+                            result.playlistTitle,
+                            result.trackCount,
+                            result.failedFolders
+                    ));
+                });
+            } catch (Exception ex) {
+                Diagnostics.log(appContext, "YMP local playlist refresh failed: " + playlist.id, ex);
+                runOnUiThread(() -> updateLibraryStatus(getString(R.string.local_playlist_refresh_failed, ex.getMessage())));
+            }
+        }, "YMP-RefreshLocalPlaylist").start();
+    }
+
+    private void showLocalPlaylistTracksDialog(LocalPlaylistStore.LocalPlaylist playlist) {
+        if (playlist == null) {
+            return;
+        }
+        Dialog dialog = new Dialog(this);
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+        ScrollView scroll = new ScrollView(this);
+        scroll.setBackgroundColor(COLOR_BG);
+        LinearLayout root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setPadding(dp(18), dp(16), dp(18), dp(18));
+        scroll.addView(root, matchScroll());
+
+        root.addView(sectionTitle(playlist.title), matchWrap());
+        addLibraryStatusRow(root, localPlaylistSubtitle(playlist));
+
+        if (playlist.tracks.isEmpty()) {
+            addLibraryStatusRow(root, getString(R.string.queue_empty));
+        } else {
+            int limit = Math.min(playlist.tracks.size(), 250);
+            for (int i = 0; i < limit; i++) {
+                addLocalTrackRow(root, playlist, playlist.tracks.get(i), dialog);
+            }
+            if (playlist.tracks.size() > limit) {
+                addLibraryStatusRow(root, getString(
+                        R.string.local_playlist_track_list_limited,
+                        limit,
+                        playlist.tracks.size()
+                ));
+            }
+        }
+
+        Button close = smallButton(getString(R.string.settings_close), COLOR_SURFACE_2, COLOR_TEXT);
+        close.setOnClickListener(v -> dialog.dismiss());
+        root.addView(close, spaced());
+
+        dialog.setContentView(scroll);
+        prepareDialogWindow(dialog, 760);
+        dialog.show();
+    }
+
+    private void addLocalTrackRow(
+            LinearLayout root,
+            LocalPlaylistStore.LocalPlaylist playlist,
+            LocalPlaylistStore.LocalTrack track,
+            Dialog dialog
+    ) {
+        LinearLayout item = new LinearLayout(this);
+        item.setOrientation(LinearLayout.VERTICAL);
+        item.setPadding(dp(14), dp(11), dp(14), dp(11));
+        item.setBackground(panelBg(COLOR_SURFACE_2, dp(12), COLOR_STROKE));
+
+        TextView title = new TextView(this);
+        title.setText(track.title);
+        title.setTextColor(COLOR_TEXT);
+        title.setTextSize(15);
+        title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        title.setSingleLine(true);
+        title.setEllipsize(TextUtils.TruncateAt.END);
+        item.addView(title, matchWrap());
+
+        TextView subtitle = new TextView(this);
+        subtitle.setText(firstNonEmpty(track.artist, track.album, track.uri));
+        subtitle.setTextColor(COLOR_MUTED);
+        subtitle.setTextSize(12);
+        subtitle.setSingleLine(true);
+        subtitle.setEllipsize(TextUtils.TruncateAt.END);
+        item.addView(subtitle, matchWrap());
+
+        Button remove = smallButton(getString(R.string.remove_track), COLOR_DANGER, COLOR_TEXT);
+        remove.setOnClickListener(v -> confirmRemoveLocalTrack(playlist, track, dialog));
+        LinearLayout.LayoutParams removeParams = matchWrap();
+        removeParams.setMargins(0, dp(8), 0, 0);
+        item.addView(remove, removeParams);
+
+        root.addView(item, spaced());
+    }
+
+    private void confirmRemoveLocalTrack(
+            LocalPlaylistStore.LocalPlaylist playlist,
+            LocalPlaylistStore.LocalTrack track,
+            Dialog dialog
+    ) {
+        showConfirmDialog(
+                getString(R.string.remove_track),
+                getString(R.string.confirm_remove_local_track, track.title, playlist.title),
+                getString(R.string.remove_track),
+                () -> removeLocalPlaylistTrack(playlist, track, dialog)
+        );
+    }
+
+    private void removeLocalPlaylistTrack(
+            LocalPlaylistStore.LocalPlaylist playlist,
+            LocalPlaylistStore.LocalTrack track,
+            Dialog dialog
+    ) {
+        boolean removed = new YmpRepository(this).removeLocalPlaylistTrack(playlist.id, track.uri);
+        loadLocalPlaylists();
+        updateLibraryStatus(getString(removed
+                ? R.string.local_track_removed
+                : R.string.local_track_remove_failed, track.title));
+        if (dialog != null) {
+            dialog.dismiss();
+        }
+        LocalPlaylistStore.LocalPlaylist updated = findCachedLocalPlaylist(playlist.id);
+        if (updated != null) {
+            showLocalPlaylistTracksDialog(updated);
+        }
+    }
+
+    private LocalPlaylistStore.LocalPlaylist findCachedLocalPlaylist(String playlistId) {
+        for (LocalPlaylistStore.LocalPlaylist playlist : cachedLocalPlaylists) {
+            if (playlist.id.equals(playlistId)) {
+                return playlist;
+            }
+        }
+        return null;
     }
 
     private void showConfirmDialog(String title, String message, String positiveLabel, Runnable confirmed) {
@@ -877,7 +1105,7 @@ public class MainActivity extends Activity {
         new Thread(() -> {
             try {
                 List<LocalPlaylistStore.LocalTrack> tracks = LocalPlaylistStore.tracksFromTree(appContext, treeUri);
-                runOnUiThread(() -> addLocalTracksAsync(playlistId, tracks, getString(R.string.local_folder_added)));
+                runOnUiThread(() -> addLocalFolderTracksAsync(playlistId, treeUri, tracks));
             } catch (Exception ex) {
                 Diagnostics.log(appContext, "YMP local folder import failed", ex);
                 runOnUiThread(() -> updateStatus(getString(R.string.local_import_failed, ex.getMessage())));
@@ -903,6 +1131,27 @@ public class MainActivity extends Activity {
                 }
             });
         }, "YMP-AddLocalTracks").start();
+    }
+
+    private void addLocalFolderTracksAsync(String playlistId, Uri treeUri, List<LocalPlaylistStore.LocalTrack> tracks) {
+        if (tracks == null || tracks.isEmpty()) {
+            updateStatus(getString(R.string.local_no_audio_found));
+            return;
+        }
+        Context appContext = getApplicationContext();
+        new Thread(() -> {
+            YmpRepository repository = new YmpRepository(appContext);
+            LocalPlaylistStore.LocalPlaylist updated = repository.addLocalFolderTracks(playlistId, treeUri, tracks);
+            int artworkUpdated = LocalArtworkEnricher.enrichMissingArtwork(appContext, tracks);
+            runOnUiThread(() -> {
+                loadLocalPlaylists();
+                String title = updated == null ? "" : updated.title;
+                updateStatus(String.format(getString(R.string.local_folder_added), tracks.size(), title));
+                if (artworkUpdated > 0) {
+                    updateStatus(getString(R.string.local_artwork_updated, artworkUpdated));
+                }
+            });
+        }, "YMP-AddLocalFolderTracks").start();
     }
 
     private void persistReadPermissions(Intent data) {

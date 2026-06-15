@@ -50,11 +50,19 @@
 - Added album result playback through album track queues.
 - Added artist result playback through top-track queues.
 
+## Completed In 0.3.4
+
+- Added local playlist rename.
+- Added local playlist track viewing and per-track removal.
+- Added imported-folder refresh for local playlists.
+- Added folder source tracking and per-track exclusions so refresh does not
+  restore tracks the user removed from a local playlist.
+
 ## Planned 0.3.x Features
 
 - Add a favorite-artist action when a stable Yandex Music endpoint is confirmed.
-- Improve local playlist management with rename, remove track, delete playlist,
-  and optional folder refresh.
+- Improve local playlist management with optional folder diff details and
+  better large-playlist editing ergonomics.
 
 ## Research Items
 

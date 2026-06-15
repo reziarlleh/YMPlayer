@@ -13,11 +13,11 @@ YMPlayer - неофициальный плеер Яндекс Музыки дл�
 
 ## Скачать
 
-Текущая рабочая сборка: **0.3.3**, `versionCode 33`.
+Текущая рабочая сборка: **0.3.4**, `versionCode 34`.
 
-- GitHub Release: [YMPlayer 0.3.3](https://github.com/reziarlleh/YMPlayer/releases/tag/v0.3.3)
-- APK в репозитории: [releases/0.3.3/YMPlayer-v0.3.3-debug-b33.apk](releases/0.3.3/YMPlayer-v0.3.3-debug-b33.apk)
-- Прямая ссылка на APK из релиза: [YMPlayer-v0.3.3-debug-b33.apk](https://github.com/reziarlleh/YMPlayer/releases/download/v0.3.3/YMPlayer-v0.3.3-debug-b33.apk)
+- GitHub Release: [YMPlayer 0.3.4](https://github.com/reziarlleh/YMPlayer/releases/tag/v0.3.4)
+- APK в репозитории: [releases/0.3.4/YMPlayer-v0.3.4-debug-b34.apk](releases/0.3.4/YMPlayer-v0.3.4-debug-b34.apk)
+- Прямая ссылка на APK из релиза: [YMPlayer-v0.3.4-debug-b34.apk](https://github.com/reziarlleh/YMPlayer/releases/download/v0.3.4/YMPlayer-v0.3.4-debug-b34.apk)
 
 Путь `app/build/outputs/apk/debug/...` появляется только после локальной сборки
 через Gradle и не является файлом в GitHub-репозитории.
@@ -44,6 +44,8 @@ YMPlayer - неофициальный плеер Яндекс Музыки дл�
   подтверждением.
 - Локальные плейлисты приложения: добавление файлов и папок через системный
   выбор Android, включая USB-накопители при наличии доступа.
+- Управление локальными плейлистами: переименование, просмотр треков, удаление
+  отдельных треков и обновление ранее импортированных папок.
 - Неудаляемый локальный плейлист "Локальное избранное" для лайкнутых локальных
   файлов.
 - Корректный пропуск недоступных локальных файлов, например если USB-накопитель
@@ -127,7 +129,7 @@ $env:Path = "$env:JAVA_HOME\bin;$env:Path"
 После локальной сборки APK будет лежать в:
 
 ```text
-app/build/outputs/apk/debug/YMPlayer-v0.3.3-debug-b33.apk
+app/build/outputs/apk/debug/YMPlayer-v0.3.4-debug-b34.apk
 ```
 
 Этот путь относится только к локальной машине разработчика. На GitHub готовые
