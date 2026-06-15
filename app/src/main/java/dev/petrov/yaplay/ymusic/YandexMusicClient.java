@@ -340,6 +340,20 @@ public final class YandexMusicClient {
         return getMyWaveLegacy(target);
     }
 
+    public WaveTracks getMyWaveFastStart(int fallbackTargetTracks) throws IOException, JSONException {
+        int target = Math.max(1, fallbackTargetTracks);
+        try {
+            WaveTracks session = getMyWaveSessionFirstBatch();
+            if (!session.tracks.isEmpty()) {
+                return session;
+            }
+        } catch (Exception ignored) {
+            // The full legacy path below still gives us a playable first track if
+            // the newer rotor session endpoint is unavailable for this account.
+        }
+        return getMyWaveLegacy(target);
+    }
+
     public WaveTracks getMoreMyWave(String sessionId, String currentTrackId, int targetTracks) throws IOException, JSONException {
         if (sessionId == null || sessionId.isEmpty() || currentTrackId == null || currentTrackId.isEmpty()) {
             return getMyWave(targetTracks);
@@ -376,6 +390,41 @@ public final class YandexMusicClient {
         for (Track track : tracks) {
             if (!batchId.isEmpty()) {
                 batchIdByTrackKey.put(track.key, batchIdByTrackKey.get(track.id));
+            }
+        }
+        return new WaveTracks(tracks, batchIdByTrackKey, batchId, sessionId);
+    }
+
+    private WaveTracks getMyWaveSessionFirstBatch() throws IOException, JSONException {
+        JSONObject body = new JSONObject();
+        JSONArray seeds = new JSONArray();
+        seeds.put(MY_WAVE_STATION);
+        body.put("seeds", seeds);
+        body.put("queue", new JSONArray());
+        body.put("includeTracksInResponse", true);
+        body.put("includeWaveModel", true);
+        body.put("interactive", true);
+
+        JSONObject result = asObject(apiPostJson("/rotor/session/new", body));
+        String sessionId = result.optString("radioSessionId");
+        String batchId = firstNonEmpty(result.optString("batchId"), result.optString("batch_id"));
+        JSONArray sequence = result.optJSONArray("sequence");
+        List<String> trackIds = trackIdsFromSequence(sequence);
+        Map<String, String> batchIdByTrackKey = new HashMap<>();
+        for (String id : trackIds) {
+            if (!batchId.isEmpty()) {
+                batchIdByTrackKey.put(id, batchId);
+            }
+        }
+
+        List<Track> tracks = tracksFromSequence(sequence);
+        if (tracks.isEmpty()) {
+            tracks = getTracks(trackIds);
+        }
+        for (Track track : tracks) {
+            String trackBatch = batchIdByTrackKey.get(track.id);
+            if (trackBatch != null && !trackBatch.isEmpty()) {
+                batchIdByTrackKey.put(track.key, trackBatch);
             }
         }
         return new WaveTracks(tracks, batchIdByTrackKey, batchId, sessionId);
@@ -548,22 +597,12 @@ public final class YandexMusicClient {
     }
 
     public String getDirectUrl(String trackKey) throws IOException, JSONException {
+        return getDirectUrl(trackKey, AudioQuality.from(null));
+    }
+
+    public String getDirectUrl(String trackKey, AudioQuality quality) throws IOException, JSONException {
         JSONArray infos = asArray(apiGet("/tracks/" + trackKey + "/download-info"));
-        JSONObject best = null;
-        int bestScore = Integer.MIN_VALUE;
-        for (int i = 0; i < infos.length(); i++) {
-            JSONObject info = infos.optJSONObject(i);
-            if (info == null || info.optBoolean("preview", false)) {
-                continue;
-            }
-            String codec = info.optString("codec", "");
-            int bitrate = info.optInt("bitrateInKbps", 0);
-            int score = bitrate + ("mp3".equalsIgnoreCase(codec) ? 10000 : 0);
-            if (score > bestScore) {
-                best = info;
-                bestScore = score;
-            }
-        }
+        JSONObject best = chooseDownloadInfo(infos, quality == null ? AudioQuality.from(null) : quality);
         if (best == null) {
             throw new IOException("No playable download-info variant for " + trackKey);
         }
@@ -573,6 +612,34 @@ public final class YandexMusicClient {
         }
         String xml = request("GET", downloadInfoUrl, null, false);
         return buildDirectLink(xml);
+    }
+
+    private static JSONObject chooseDownloadInfo(JSONArray infos, AudioQuality quality) {
+        JSONObject best = null;
+        int bestScore = Integer.MIN_VALUE;
+        int target = quality.targetBitrateKbps();
+        for (int i = 0; i < infos.length(); i++) {
+            JSONObject info = infos.optJSONObject(i);
+            if (info == null || info.optBoolean("preview", false)) {
+                continue;
+            }
+            String codec = info.optString("codec", "");
+            int bitrate = info.optInt("bitrateInKbps", 0);
+            int codecBonus = "mp3".equalsIgnoreCase(codec) ? 2 : 0;
+            int score;
+            if (quality.preferHighest()) {
+                score = bitrate + codecBonus;
+            } else if (bitrate <= target) {
+                score = 200000 + bitrate + codecBonus;
+            } else {
+                score = 100000 - Math.abs(bitrate - target) + codecBonus;
+            }
+            if (score > bestScore) {
+                best = info;
+                bestScore = score;
+            }
+        }
+        return best;
     }
 
     public byte[] downloadBytes(String url) throws IOException {
@@ -1012,6 +1079,25 @@ public final class YandexMusicClient {
             }
         }
         return ids;
+    }
+
+    private static List<Track> tracksFromSequence(JSONArray sequence) {
+        List<Track> tracks = new ArrayList<>();
+        if (sequence == null) {
+            return tracks;
+        }
+        for (int i = 0; i < sequence.length(); i++) {
+            JSONObject item = sequence.optJSONObject(i);
+            JSONObject trackObject = item == null ? null : item.optJSONObject("track");
+            if (trackObject == null) {
+                continue;
+            }
+            Track track = parseTrack(trackObject, tracks.size() + 1);
+            if (track != null) {
+                tracks.add(track);
+            }
+        }
+        return tracks;
     }
 
     private static String joinTitles(JSONArray array) {

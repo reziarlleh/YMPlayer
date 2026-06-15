@@ -20,7 +20,6 @@ import dev.petrov.yaplay.ymusic.TokenStore;
 import dev.petrov.yaplay.ymusic.YandexMusicClient;
 
 public final class YmpRepository {
-    private static final int INITIAL_WAVE_TARGET = 60;
     private static final int MORE_WAVE_TARGET = 30;
 
     private final Context context;
@@ -50,8 +49,8 @@ public final class YmpRepository {
     }
 
     public synchronized WaveQueue loadInitialWave() throws Exception {
-        YandexMusicClient.WaveTracks wave = client().getMyWave(INITIAL_WAVE_TARGET);
-        Diagnostics.log(context, "YMP loaded My Wave: tracks=" + wave.tracks.size()
+        YandexMusicClient.WaveTracks wave = client().getMyWaveFastStart(1);
+        Diagnostics.log(context, "YMP loaded My Wave fast-start: tracks=" + wave.tracks.size()
                 + ", session=" + safe(wave.sessionId)
                 + ", batch=" + safe(wave.firstBatchId));
         return new WaveQueue(wave.tracks, wave.sessionId, wave.firstBatchId, wave.batchIdByTrackKey);

@@ -7,6 +7,8 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import dev.petrov.yaplay.Diagnostics;
+import dev.petrov.yaplay.player.YmpSettings;
+import dev.petrov.yaplay.ymusic.AudioQuality;
 import dev.petrov.yaplay.ymusic.YandexMusicClient;
 
 import java.io.BufferedInputStream;
@@ -57,12 +59,12 @@ public final class YandexTrackCache {
     }
 
     public synchronized ParcelFileDescriptor openLiked(YandexMusicClient client, YandexMusicClient.Track track) throws IOException {
-        File file = ensureCached(likedRoot, client, track);
+        File file = ensureCached(likedRoot, client, track, AudioQuality.from(YmpSettings.cacheQuality(context)));
         return ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY);
     }
 
     public synchronized void cacheLiked(YandexMusicClient client, YandexMusicClient.Track track) throws IOException {
-        ensureCached(likedRoot, client, track);
+        ensureCached(likedRoot, client, track, AudioQuality.from(YmpSettings.cacheQuality(context)));
     }
 
     public synchronized ParcelFileDescriptor openPlayback(YandexMusicClient client, YandexMusicClient.Track track) throws IOException {
@@ -73,7 +75,7 @@ public final class YandexTrackCache {
             return ParcelFileDescriptor.open(liked, ParcelFileDescriptor.MODE_READ_ONLY);
         }
 
-        File file = ensureCached(playbackRoot, client, track);
+        File file = ensureCached(playbackRoot, client, track, AudioQuality.from(YmpSettings.streamQuality(context)));
         evictPlaybackCache();
         return ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY);
     }
@@ -85,7 +87,7 @@ public final class YandexTrackCache {
             writeMetadata(likedRoot, track);
             return;
         }
-        ensureCached(playbackRoot, client, track);
+        ensureCached(playbackRoot, client, track, AudioQuality.from(YmpSettings.streamQuality(context)));
         evictPlaybackCache();
     }
 
@@ -164,7 +166,7 @@ public final class YandexTrackCache {
         return new Summary(liked.count + playback.count, liked.bytes + playback.bytes);
     }
 
-    private File ensureCached(File root, YandexMusicClient client, YandexMusicClient.Track track) throws IOException {
+    private File ensureCached(File root, YandexMusicClient client, YandexMusicClient.Track track, AudioQuality quality) throws IOException {
         File file = audioFile(root, track.key);
         if (file.exists()) {
             if (file.length() > 0L && isSupportedAudio(file)) {
@@ -188,7 +190,7 @@ public final class YandexTrackCache {
 
         String directUrl;
         try {
-            directUrl = client.getDirectUrl(track.key);
+            directUrl = client.getDirectUrl(track.key, quality);
         } catch (Exception ex) {
             throw new IOException("Unable to resolve media URL for " + track.key, ex);
         }

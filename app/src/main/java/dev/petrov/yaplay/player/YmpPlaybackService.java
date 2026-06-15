@@ -127,6 +127,8 @@ public class YmpPlaybackService extends MediaBrowserService {
     private boolean prepared;
     private boolean sidebarWatchdogStarted;
     private boolean likedKeysLoaded;
+    private boolean wavePrefetching;
+    private boolean forceInitialWavePrefetch;
     private int playMode = PLAY_MODE_ORDER;
     private int currentSourceType = SOURCE_WAVE;
     private int currentPlaylistKind = -1;
@@ -163,8 +165,13 @@ public class YmpPlaybackService extends MediaBrowserService {
             updateSession();
             updateNotification();
             broadcastStatus();
-            maybePrefetchWave();
             maybePrefetchNextAudio();
+            if (forceInitialWavePrefetch) {
+                forceInitialWavePrefetch = false;
+                prefetchWave(true);
+            } else {
+                maybePrefetchWave();
+            }
         });
         mediaPlayer.setOnCompletionListener(mp -> playNextInternal(true));
         mediaPlayer.setOnErrorListener((mp, what, extra) -> {
@@ -309,6 +316,7 @@ public class YmpPlaybackService extends MediaBrowserService {
                 mainHandler.post(() -> {
                     waveQueue = loaded;
                     setQueue(loaded.tracks, SOURCE_WAVE, "My Wave");
+                    forceInitialWavePrefetch = true;
                     playAt(0);
                 });
             } catch (Exception ex) {
@@ -511,6 +519,8 @@ public class YmpPlaybackService extends MediaBrowserService {
         prefetchingTrackKey = "";
         prefetchedTrackKey = "";
         lastWaveFeedbackTrackKey = "";
+        wavePrefetching = false;
+        forceInitialWavePrefetch = false;
         if (waveMode) {
             playMode = PLAY_MODE_ORDER;
             shuffle = false;
@@ -700,14 +710,31 @@ public class YmpPlaybackService extends MediaBrowserService {
     }
 
     private void maybePrefetchWave() {
-        if (!waveMode || loading || waveQueue == null || queueIndex < queue.size() - 8) {
+        prefetchWave(false);
+    }
+
+    private void prefetchWave(boolean force) {
+        if (!waveMode || loading || waveQueue == null || wavePrefetching
+                || (!force && queueIndex < queue.size() - 8)) {
             return;
         }
+        wavePrefetching = true;
+        YmpRepository.WaveQueue sourceWaveQueue = waveQueue;
         new Thread(() -> {
             try {
-                waveQueue = repository.loadMoreWave(waveQueue);
-                mainHandler.post(this::appendWaveTracks);
+                YmpRepository.WaveQueue loaded = repository.loadMoreWave(sourceWaveQueue);
+                mainHandler.post(() -> {
+                    if (!waveMode || waveQueue != sourceWaveQueue) {
+                        wavePrefetching = false;
+                        return;
+                    }
+                    waveQueue = loaded;
+                    wavePrefetching = false;
+                    appendWaveTracks();
+                    Diagnostics.log(this, "YMP background My Wave prefetch complete: queue=" + queue.size());
+                });
             } catch (Exception ex) {
+                mainHandler.post(() -> wavePrefetching = false);
                 Diagnostics.log(this, "YMP background My Wave prefetch failed", ex);
             }
         }, "YMP-PrefetchWave").start();

@@ -149,6 +149,15 @@
     <string name="sidebar_overlay_permission_required">Разрешите YMPlayer показ поверх других приложений, затем включите сайдбар снова</string>
     <string name="sidebar_power_menu_failed">Прошивка заблокировала меню питания</string>
     <string name="auto_cache_liked_tracks">Автоматически скачивать понравившиеся треки в локальный кэш</string>
+    <string name="stream_quality_template">Качество онлайн: %1$s</string>
+    <string name="cache_quality_template">Качество кэша: %1$s</string>
+    <string name="stream_quality_saved">Качество онлайн: %1$s. Настройка применится к новым загрузкам временного кэша.</string>
+    <string name="cache_quality_saved">Качество кэша: %1$s. Уже скачанные избранные треки не изменятся до очистки или повторной синхронизации.</string>
+    <string name="quality_auto">Авто</string>
+    <string name="quality_economy">Эконом 128</string>
+    <string name="quality_standard">Стандарт 192</string>
+    <string name="quality_high">Высокое 320</string>
+    <string name="quality_max">Максимум</string>
     <string name="sidebar_notification_channel">Сайдбар</string>
     <string name="sidebar_notification_title">Сайдбар YMPlayer</string>
     <string name="sidebar_notification_text">Встроенный сайдбар активен</string>

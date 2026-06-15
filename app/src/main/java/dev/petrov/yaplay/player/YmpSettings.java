@@ -8,6 +8,14 @@ public final class YmpSettings {
     private static final String KEY_SIDEBAR_WATCHDOG = "sidebar_watchdog";
     private static final String KEY_AUTO_CACHE_LIKED = "auto_cache_liked";
     private static final String KEY_EQUALIZER_PACKAGE = "equalizer_package";
+    private static final String KEY_STREAM_QUALITY = "stream_quality";
+    private static final String KEY_CACHE_QUALITY = "cache_quality";
+
+    public static final String QUALITY_AUTO = "auto";
+    public static final String QUALITY_ECONOMY = "economy";
+    public static final String QUALITY_STANDARD = "standard";
+    public static final String QUALITY_HIGH = "high";
+    public static final String QUALITY_MAX = "max";
 
     private YmpSettings() {
     }
@@ -42,6 +50,33 @@ public final class YmpSettings {
 
     public static void setEqualizerPackage(Context context, String packageName) {
         prefs(context).edit().putString(KEY_EQUALIZER_PACKAGE, packageName == null ? "" : packageName.trim()).apply();
+    }
+
+    public static String streamQuality(Context context) {
+        return normalizeQuality(prefs(context).getString(KEY_STREAM_QUALITY, QUALITY_AUTO));
+    }
+
+    public static void setStreamQuality(Context context, String quality) {
+        prefs(context).edit().putString(KEY_STREAM_QUALITY, normalizeQuality(quality)).apply();
+    }
+
+    public static String cacheQuality(Context context) {
+        return normalizeQuality(prefs(context).getString(KEY_CACHE_QUALITY, QUALITY_AUTO));
+    }
+
+    public static void setCacheQuality(Context context, String quality) {
+        prefs(context).edit().putString(KEY_CACHE_QUALITY, normalizeQuality(quality)).apply();
+    }
+
+    public static String normalizeQuality(String quality) {
+        String value = quality == null ? "" : quality.trim().toLowerCase(java.util.Locale.US);
+        if (QUALITY_ECONOMY.equals(value)
+                || QUALITY_STANDARD.equals(value)
+                || QUALITY_HIGH.equals(value)
+                || QUALITY_MAX.equals(value)) {
+            return value;
+        }
+        return QUALITY_AUTO;
     }
 
     private static SharedPreferences prefs(Context context) {

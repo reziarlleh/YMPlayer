@@ -159,6 +159,15 @@
     <string name="sidebar_overlay_permission_required">Allow YMPlayer to draw over other apps, then enable SideBar again</string>
     <string name="sidebar_power_menu_failed">Power menu is blocked by this firmware</string>
     <string name="auto_cache_liked_tracks">Automatically download liked tracks to local cache</string>
+    <string name="stream_quality_template">Online quality: %1$s</string>
+    <string name="cache_quality_template">Cache quality: %1$s</string>
+    <string name="stream_quality_saved">Online quality: %1$s. New playback-cache downloads will use it.</string>
+    <string name="cache_quality_saved">Cache quality: %1$s. Already downloaded liked tracks stay unchanged until cache refresh.</string>
+    <string name="quality_auto">Auto</string>
+    <string name="quality_economy">Economy 128</string>
+    <string name="quality_standard">Standard 192</string>
+    <string name="quality_high">High 320</string>
+    <string name="quality_max">Maximum</string>
     <string name="sidebar_notification_channel">SideBar</string>
     <string name="sidebar_notification_title">YMPlayer SideBar</string>
     <string name="sidebar_notification_text">Built-in SideBar overlay is active</string>

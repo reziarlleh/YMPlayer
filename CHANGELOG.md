@@ -3,6 +3,21 @@
 This file tracks only working, testable versions. Broken or experimental
 intermediate builds should not be added here.
 
+## 0.3.7 - 2026-06-15
+
+My Wave startup and audio quality controls.
+
+- My Wave now starts from the first received rotor-session batch instead of
+  waiting until the initial queue is expanded to the full target size.
+- After the first track is prepared, YMPlayer preloads the next audio file and
+  loads more My Wave batches in the background.
+- Added separate quality settings for online playback cache and permanent
+  liked-track cache.
+- Quality profiles select the closest available Yandex Music download variant:
+  Auto/Maximum, Economy 128, Standard 192, and High 320.
+- Existing cached files are reused as-is; changed quality applies to new
+  temporary downloads and to liked tracks downloaded after cache refresh.
+
 ## 0.3.6 - 2026-06-15
 
 Search UI polish.

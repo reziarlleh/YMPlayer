@@ -113,6 +113,8 @@ public class MainActivity extends Activity {
     private CheckBox showTokenBox;
     private CheckBox sidebarWatchdogBox;
     private CheckBox autoCacheLikedBox;
+    private Button streamQualityButton;
+    private Button cacheQualityButton;
     private EditText equalizerPackageEdit;
     private BroadcastReceiver cacheStatusReceiver;
     private BroadcastReceiver playerStatusReceiver;
@@ -2113,6 +2115,14 @@ public class MainActivity extends Activity {
         });
         root.addView(autoCacheLikedBox, spaced());
 
+        streamQualityButton = pillButton(streamQualityText(), COLOR_SURFACE_2, COLOR_TEXT);
+        streamQualityButton.setOnClickListener(v -> cycleStreamQuality());
+        root.addView(streamQualityButton, rowButtonParams());
+
+        cacheQualityButton = pillButton(cacheQualityText(), COLOR_SURFACE_2, COLOR_TEXT);
+        cacheQualityButton.setOnClickListener(v -> cycleCacheQuality());
+        root.addView(cacheQualityButton, rowButtonParams());
+
         addButton(root, R.string.sync_favorite_tracks, v -> startFavoritesCacheSync());
         addButton(root, R.string.cancel_cache_sync, v -> cancelCacheSync());
         addButton(root, R.string.show_cache_status, v -> updateStatus(statusWithCache(CacheSyncService.lastStatus())));
@@ -3021,6 +3031,71 @@ public class MainActivity extends Activity {
             CacheSettings.save(this, wifiOnlyBox.isChecked(), chargingOnlyBox.isChecked());
             Diagnostics.log(this, "YMP cache settings saved: wifiOnly=" + wifiOnlyBox.isChecked()
                     + ", chargingOnly=" + chargingOnlyBox.isChecked());
+        }
+    }
+
+    private void cycleStreamQuality() {
+        String quality = nextQuality(YmpSettings.streamQuality(this));
+        YmpSettings.setStreamQuality(this, quality);
+        updateQualityButtons();
+        Diagnostics.log(this, "YMP stream quality saved: " + quality);
+        updateStatus(statusWithCache(getString(R.string.stream_quality_saved, qualityLabel(quality))));
+    }
+
+    private void cycleCacheQuality() {
+        String quality = nextQuality(YmpSettings.cacheQuality(this));
+        YmpSettings.setCacheQuality(this, quality);
+        updateQualityButtons();
+        Diagnostics.log(this, "YMP cache quality saved: " + quality);
+        updateStatus(statusWithCache(getString(R.string.cache_quality_saved, qualityLabel(quality))));
+    }
+
+    private void updateQualityButtons() {
+        if (streamQualityButton != null) {
+            streamQualityButton.setText(streamQualityText());
+        }
+        if (cacheQualityButton != null) {
+            cacheQualityButton.setText(cacheQualityText());
+        }
+    }
+
+    private String streamQualityText() {
+        return getString(R.string.stream_quality_template, qualityLabel(YmpSettings.streamQuality(this)));
+    }
+
+    private String cacheQualityText() {
+        return getString(R.string.cache_quality_template, qualityLabel(YmpSettings.cacheQuality(this)));
+    }
+
+    private String nextQuality(String current) {
+        switch (YmpSettings.normalizeQuality(current)) {
+            case YmpSettings.QUALITY_AUTO:
+                return YmpSettings.QUALITY_ECONOMY;
+            case YmpSettings.QUALITY_ECONOMY:
+                return YmpSettings.QUALITY_STANDARD;
+            case YmpSettings.QUALITY_STANDARD:
+                return YmpSettings.QUALITY_HIGH;
+            case YmpSettings.QUALITY_HIGH:
+                return YmpSettings.QUALITY_MAX;
+            case YmpSettings.QUALITY_MAX:
+            default:
+                return YmpSettings.QUALITY_AUTO;
+        }
+    }
+
+    private String qualityLabel(String quality) {
+        switch (YmpSettings.normalizeQuality(quality)) {
+            case YmpSettings.QUALITY_ECONOMY:
+                return getString(R.string.quality_economy);
+            case YmpSettings.QUALITY_STANDARD:
+                return getString(R.string.quality_standard);
+            case YmpSettings.QUALITY_HIGH:
+                return getString(R.string.quality_high);
+            case YmpSettings.QUALITY_MAX:
+                return getString(R.string.quality_max);
+            case YmpSettings.QUALITY_AUTO:
+            default:
+                return getString(R.string.quality_auto);
         }
     }
 

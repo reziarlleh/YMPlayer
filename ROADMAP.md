@@ -72,6 +72,14 @@
 - Added explicit search-result actions, including adding a found track to a
   Yandex Music playlist.
 
+## Completed In 0.3.7
+
+- Changed My Wave startup to play the first received batch immediately.
+- Moved extra My Wave batch loading and next-track audio preloading to
+  background work after playback starts.
+- Added separate quality profiles for online playback and permanent liked-track
+  cache downloads.
+
 ## Planned 0.3.x Features
 
 - Improve local playlist management with optional folder diff details and
