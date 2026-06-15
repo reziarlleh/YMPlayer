@@ -55,8 +55,10 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 
 import dev.petrov.yaplay.player.SideBarHelper;
@@ -80,8 +82,7 @@ public class MainActivity extends Activity {
     private static final int COLOR_ACCENT = 0xffffd21f;
     private static final int COLOR_ACCENT_2 = 0xff32d6c2;
     private static final int COLOR_DANGER = 0xffe84a5f;
-    private static final int REQUEST_LOCAL_FILES = 6101;
-    private static final int REQUEST_LOCAL_FOLDER = 6102;
+    private static final int REQUEST_STORAGE_ROOT = 6102;
 
     private TextView statusView;
     private ImageView coverView;
@@ -202,10 +203,8 @@ public class MainActivity extends Activity {
         if (resultCode != RESULT_OK) {
             return;
         }
-        if (requestCode == REQUEST_LOCAL_FILES) {
-            handleLocalFilesResult(data);
-        } else if (requestCode == REQUEST_LOCAL_FOLDER) {
-            handleLocalFolderResult(data);
+        if (requestCode == REQUEST_STORAGE_ROOT) {
+            handleStorageRootResult(data);
         }
     }
 
@@ -582,13 +581,9 @@ public class MainActivity extends Activity {
             importParams.setMargins(0, dp(8), 0, 0);
             item.addView(importActions, importParams);
 
-            Button files = smallButton(getString(R.string.add_local_files), COLOR_SURFACE_2, COLOR_TEXT);
-            files.setOnClickListener(v -> openLocalFilesPicker(playlist.id));
-            importActions.addView(files, rowButtonParams(1f));
-
-            Button folder = smallButton(getString(R.string.add_local_folder), COLOR_SURFACE_2, COLOR_TEXT);
-            folder.setOnClickListener(v -> openLocalFolderPicker(playlist.id));
-            importActions.addView(folder, rowButtonParams(1f));
+            Button media = smallButton(getString(R.string.add_local_media), COLOR_SURFACE_2, COLOR_TEXT);
+            media.setOnClickListener(v -> showLocalMediaBrowser(playlist.id));
+            importActions.addView(media, rowButtonParams(1f));
 
             Button refresh = smallButton(getString(R.string.refresh_folders), COLOR_SURFACE_2, COLOR_TEXT);
             refresh.setOnClickListener(v -> refreshLocalPlaylistFolders(playlist));
@@ -1051,23 +1046,7 @@ public class MainActivity extends Activity {
         dialog.show();
     }
 
-    private void openLocalFilesPicker(String playlistId) {
-        pendingLocalPlaylistId = playlistId == null ? "" : playlistId;
-        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
-        intent.addCategory(Intent.CATEGORY_OPENABLE);
-        intent.setType("audio/*");
-        intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
-        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION
-                | Intent.FLAG_GRANT_WRITE_URI_PERMISSION
-                | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
-        try {
-            startActivityForResult(intent, REQUEST_LOCAL_FILES);
-        } catch (Exception ex) {
-            updateStatus(getString(R.string.local_picker_failed, ex.getMessage()));
-        }
-    }
-
-    private void openLocalFolderPicker(String playlistId) {
+    private void openStorageRootPicker(String playlistId, Dialog dialog) {
         pendingLocalPlaylistId = playlistId == null ? "" : playlistId;
         Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
         intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION
@@ -1075,24 +1054,16 @@ public class MainActivity extends Activity {
                 | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION
                 | Intent.FLAG_GRANT_PREFIX_URI_PERMISSION);
         try {
-            startActivityForResult(intent, REQUEST_LOCAL_FOLDER);
+            if (dialog != null) {
+                dialog.dismiss();
+            }
+            startActivityForResult(intent, REQUEST_STORAGE_ROOT);
         } catch (Exception ex) {
             updateStatus(getString(R.string.local_picker_failed, ex.getMessage()));
         }
     }
 
-    private void handleLocalFilesResult(Intent data) {
-        String playlistId = pendingLocalPlaylistId;
-        pendingLocalPlaylistId = "";
-        if (playlistId.isEmpty()) {
-            return;
-        }
-        persistReadPermissions(data);
-        List<LocalPlaylistStore.LocalTrack> tracks = LocalPlaylistStore.tracksFromFileIntent(this, data);
-        addLocalTracksAsync(playlistId, tracks, getString(R.string.local_files_added));
-    }
-
-    private void handleLocalFolderResult(Intent data) {
+    private void handleStorageRootResult(Intent data) {
         String playlistId = pendingLocalPlaylistId;
         pendingLocalPlaylistId = "";
         if (playlistId.isEmpty() || data == null || data.getData() == null) {
@@ -1100,17 +1071,300 @@ public class MainActivity extends Activity {
         }
         Uri treeUri = data.getData();
         persistReadPermission(treeUri);
-        updateStatus(getString(R.string.local_folder_scanning));
+        LocalPlaylistStore.StorageRoot root = new LocalPlaylistStore(this).addStorageRoot(treeUri);
+        updateStatus(getString(R.string.local_storage_root_added, root == null ? "" : root.title));
+        showLocalMediaBrowser(playlistId);
+    }
+
+    private void showLocalMediaBrowser(String playlistId) {
+        if (playlistId == null || playlistId.trim().isEmpty()) {
+            return;
+        }
+        Dialog dialog = new Dialog(this);
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+        ScrollView scroll = new ScrollView(this);
+        scroll.setBackgroundColor(COLOR_BG);
+        LinearLayout root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setPadding(dp(18), dp(16), dp(18), dp(18));
+        scroll.addView(root, matchScroll());
+
+        LocalBrowserState state = new LocalBrowserState(playlistId, dialog, root);
+        renderLocalBrowserRoots(state);
+
+        dialog.setContentView(scroll);
+        prepareDialogWindow(dialog, 820);
+        dialog.show();
+    }
+
+    private void renderLocalBrowserRoots(LocalBrowserState state) {
+        state.root.removeAllViews();
+        state.root.addView(sectionTitle(getString(R.string.local_browser_title)), matchWrap());
+        addLibraryStatusRow(state.root, getString(R.string.local_browser_hint));
+
+        Button addRoot = controlButton(getString(R.string.add_storage_root), COLOR_ACCENT, COLOR_BG, 52);
+        addRoot.setOnClickListener(v -> openStorageRootPicker(state.playlistId, state.dialog));
+        state.root.addView(addRoot, spaced());
+
+        List<LocalPlaylistStore.StorageRoot> roots = new LocalPlaylistStore(this).storageRoots();
+        if (roots.isEmpty()) {
+            addLibraryStatusRow(state.root, getString(R.string.local_browser_no_roots));
+        } else {
+            for (LocalPlaylistStore.StorageRoot root : roots) {
+                addLibraryAction(
+                        state.root,
+                        root.title,
+                        root.uri,
+                        () -> openLocalBrowserRoot(state, root)
+                );
+            }
+        }
+
+        Button close = smallButton(getString(R.string.settings_close), COLOR_SURFACE_2, COLOR_TEXT);
+        close.setOnClickListener(v -> state.dialog.dismiss());
+        state.root.addView(close, spaced());
+    }
+
+    private void openLocalBrowserRoot(LocalBrowserState state, LocalPlaylistStore.StorageRoot root) {
+        if (root == null) {
+            return;
+        }
+        state.treeUri = root.asUri();
+        state.currentDocumentId = LocalPlaylistStore.rootDocumentId(state.treeUri);
+        state.currentTitle = root.title;
+        state.backDocumentIds.clear();
+        state.backTitles.clear();
+        loadLocalBrowserFolder(state);
+    }
+
+    private void navigateLocalBrowserFolder(LocalBrowserState state, LocalPlaylistStore.DocumentItem folder) {
+        if (folder == null || !folder.directory) {
+            return;
+        }
+        state.backDocumentIds.add(state.currentDocumentId);
+        state.backTitles.add(state.currentTitle);
+        state.currentDocumentId = folder.documentId;
+        state.currentTitle = folder.name;
+        loadLocalBrowserFolder(state);
+    }
+
+    private void navigateLocalBrowserBack(LocalBrowserState state) {
+        if (state.backDocumentIds.isEmpty()) {
+            renderLocalBrowserRoots(state);
+            return;
+        }
+        int last = state.backDocumentIds.size() - 1;
+        state.currentDocumentId = state.backDocumentIds.remove(last);
+        state.currentTitle = state.backTitles.remove(last);
+        loadLocalBrowserFolder(state);
+    }
+
+    private void loadLocalBrowserFolder(LocalBrowserState state) {
+        state.root.removeAllViews();
+        state.root.addView(sectionTitle(state.currentTitle), matchWrap());
+        addLibraryStatusRow(state.root, getString(R.string.local_browser_loading));
         Context appContext = getApplicationContext();
         new Thread(() -> {
             try {
-                List<LocalPlaylistStore.LocalTrack> tracks = LocalPlaylistStore.tracksFromTree(appContext, treeUri);
-                runOnUiThread(() -> addLocalFolderTracksAsync(playlistId, treeUri, tracks));
+                List<LocalPlaylistStore.DocumentItem> items = LocalPlaylistStore.listDocumentChildren(
+                        appContext,
+                        state.treeUri,
+                        state.currentDocumentId
+                );
+                runOnUiThread(() -> renderLocalBrowserItems(state, items));
             } catch (Exception ex) {
-                Diagnostics.log(appContext, "YMP local folder import failed", ex);
+                Diagnostics.log(appContext, "YMP local browser folder load failed", ex);
+                runOnUiThread(() -> {
+                    state.root.removeAllViews();
+                    state.root.addView(sectionTitle(state.currentTitle), matchWrap());
+                    addLibraryStatusRow(state.root, getString(R.string.local_browser_load_failed, ex.getMessage()));
+                    addLocalBrowserNavigationButtons(state);
+                });
+            }
+        }, "YMP-LocalBrowserList").start();
+    }
+
+    private void renderLocalBrowserItems(LocalBrowserState state, List<LocalPlaylistStore.DocumentItem> items) {
+        state.root.removeAllViews();
+        state.root.addView(sectionTitle(state.currentTitle), matchWrap());
+        addLocalBrowserNavigationButtons(state);
+
+        TextView selection = new TextView(this);
+        selection.setText(localBrowserSelectionText(state));
+        selection.setTextColor(COLOR_TEXT);
+        selection.setTextSize(13);
+        selection.setPadding(dp(12), dp(8), dp(12), dp(8));
+        selection.setBackground(panelBg(0xff0d141b, dp(12), 0xff1d2b36));
+        state.selectionView = selection;
+        state.root.addView(selection, spaced());
+
+        if (items == null || items.isEmpty()) {
+            addLibraryStatusRow(state.root, getString(R.string.local_browser_empty_folder));
+            return;
+        }
+        for (LocalPlaylistStore.DocumentItem item : items) {
+            addLocalBrowserItemRow(state, item);
+        }
+    }
+
+    private void addLocalBrowserNavigationButtons(LocalBrowserState state) {
+        LinearLayout actions = row();
+        actions.setGravity(Gravity.CENTER_VERTICAL);
+        state.root.addView(actions, spaced());
+
+        Button back = smallButton(
+                getString(state.backDocumentIds.isEmpty()
+                        ? R.string.local_browser_back_to_roots
+                        : R.string.previous_track),
+                COLOR_SURFACE_2,
+                COLOR_TEXT
+        );
+        back.setOnClickListener(v -> navigateLocalBrowserBack(state));
+        actions.addView(back, rowButtonParams(1f));
+
+        Button addSelected = smallButton(getString(R.string.local_browser_add_selected), COLOR_ACCENT, COLOR_BG);
+        addSelected.setOnClickListener(v -> importLocalBrowserSelection(state));
+        actions.addView(addSelected, rowButtonParams(1f));
+
+        Button addRoot = smallButton(getString(R.string.add_storage_root), COLOR_SURFACE_2, COLOR_TEXT);
+        addRoot.setOnClickListener(v -> openStorageRootPicker(state.playlistId, state.dialog));
+        actions.addView(addRoot, rowButtonParams(1f));
+    }
+
+    private void addLocalBrowserItemRow(LocalBrowserState state, LocalPlaylistStore.DocumentItem item) {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setPadding(dp(10), dp(8), dp(10), dp(8));
+        row.setBackground(panelBg(COLOR_SURFACE_2, dp(12), COLOR_STROKE));
+
+        CheckBox box = new CheckBox(this);
+        box.setText((item.directory ? getString(R.string.local_browser_folder_prefix) : "") + item.name);
+        box.setTextColor(COLOR_TEXT);
+        box.setTextSize(14);
+        box.setSingleLine(true);
+        box.setEllipsize(TextUtils.TruncateAt.END);
+        box.setButtonTintList(android.content.res.ColorStateList.valueOf(COLOR_ACCENT));
+        String key = item.directory ? item.asFolderTreeUri().toString() : item.uri.toString();
+        box.setChecked(item.directory
+                ? state.selectedFolders.containsKey(key)
+                : state.selectedFiles.containsKey(key));
+        box.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            if (item.directory) {
+                if (isChecked) {
+                    state.selectedFolders.put(key, item.asFolderTreeUri());
+                } else {
+                    state.selectedFolders.remove(key);
+                }
+            } else if (isChecked) {
+                state.selectedFiles.put(key, item);
+            } else {
+                state.selectedFiles.remove(key);
+            }
+            updateLocalBrowserSelection(state);
+        });
+        row.addView(box, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+
+        if (item.directory) {
+            Button open = smallButton(getString(R.string.local_browser_open_folder), COLOR_SURFACE, COLOR_TEXT);
+            open.setOnClickListener(v -> navigateLocalBrowserFolder(state, item));
+            row.addView(open, compactButtonParams(dp(110)));
+        }
+
+        state.root.addView(row, spaced());
+    }
+
+    private void updateLocalBrowserSelection(LocalBrowserState state) {
+        if (state.selectionView != null) {
+            state.selectionView.setText(localBrowserSelectionText(state));
+        }
+    }
+
+    private String localBrowserSelectionText(LocalBrowserState state) {
+        return getString(
+                R.string.local_browser_selection_count,
+                state.selectedFiles.size(),
+                state.selectedFolders.size()
+        );
+    }
+
+    private void importLocalBrowserSelection(LocalBrowserState state) {
+        if (state.selectedFiles.isEmpty() && state.selectedFolders.isEmpty()) {
+            updateStatus(getString(R.string.local_browser_nothing_selected));
+            return;
+        }
+        Map<String, LocalPlaylistStore.DocumentItem> selectedFiles = new LinkedHashMap<>(state.selectedFiles);
+        List<Uri> selectedFolders = new ArrayList<>(state.selectedFolders.values());
+        String playlistId = state.playlistId;
+        state.dialog.dismiss();
+        updateStatus(getString(R.string.local_browser_import_started));
+        Context appContext = getApplicationContext();
+        new Thread(() -> {
+            try {
+                LocalPlaylistStore store = new LocalPlaylistStore(appContext);
+                LocalPlaylistStore.LocalPlaylist updated = null;
+                List<LocalPlaylistStore.LocalTrack> allTracks = new ArrayList<>();
+                List<LocalPlaylistStore.LocalTrack> fileTracks = new ArrayList<>();
+                int failed = 0;
+                for (LocalPlaylistStore.DocumentItem item : selectedFiles.values()) {
+                    LocalPlaylistStore.LocalTrack track = LocalPlaylistStore.trackFromDocument(appContext, item);
+                    if (track != null && track.isPlayable()) {
+                        fileTracks.add(track);
+                    } else {
+                        failed++;
+                    }
+                }
+                if (!fileTracks.isEmpty()) {
+                    updated = store.addTracks(playlistId, fileTracks);
+                    allTracks.addAll(fileTracks);
+                }
+                for (Uri folderUri : selectedFolders) {
+                    try {
+                        List<LocalPlaylistStore.LocalTrack> folderTracks = LocalPlaylistStore.tracksFromTree(appContext, folderUri);
+                        if (folderTracks.isEmpty()) {
+                            failed++;
+                            continue;
+                        }
+                        updated = store.addFolderTracks(playlistId, folderUri, folderTracks);
+                        allTracks.addAll(folderTracks);
+                    } catch (Exception ex) {
+                        failed++;
+                        Diagnostics.log(appContext, "YMP local browser folder import failed: " + folderUri, ex);
+                    }
+                }
+                int artworkUpdated = allTracks.isEmpty()
+                        ? 0
+                        : LocalArtworkEnricher.enrichMissingArtwork(appContext, allTracks);
+                LocalPlaylistStore.LocalPlaylist finalUpdated = updated;
+                int total = allTracks.size();
+                int failedCount = failed;
+                int selectedFileCount = selectedFiles.size();
+                int selectedFolderCount = selectedFolders.size();
+                runOnUiThread(() -> {
+                    loadLocalPlaylists();
+                    if (total <= 0) {
+                        updateStatus(getString(R.string.local_no_audio_found));
+                        return;
+                    }
+                    String title = finalUpdated == null ? "" : finalUpdated.title;
+                    String message = getString(
+                            R.string.local_browser_imported,
+                            total,
+                            title,
+                            selectedFileCount,
+                            selectedFolderCount,
+                            failedCount
+                    );
+                    if (artworkUpdated > 0) {
+                        message += "\n" + getString(R.string.local_artwork_updated, artworkUpdated);
+                    }
+                    updateStatus(message);
+                });
+            } catch (Exception ex) {
+                Diagnostics.log(appContext, "YMP local browser import failed", ex);
                 runOnUiThread(() -> updateStatus(getString(R.string.local_import_failed, ex.getMessage())));
             }
-        }, "YMP-ImportLocalFolder").start();
+        }, "YMP-ImportBrowserSelection").start();
     }
 
     private void addLocalTracksAsync(String playlistId, List<LocalPlaylistStore.LocalTrack> tracks, String messageTemplate) {
@@ -2804,6 +3058,26 @@ public class MainActivity extends Activity {
             }
         }
         return "";
+    }
+
+    private static final class LocalBrowserState {
+        final String playlistId;
+        final Dialog dialog;
+        final LinearLayout root;
+        final Map<String, LocalPlaylistStore.DocumentItem> selectedFiles = new LinkedHashMap<>();
+        final Map<String, Uri> selectedFolders = new LinkedHashMap<>();
+        final List<String> backDocumentIds = new ArrayList<>();
+        final List<String> backTitles = new ArrayList<>();
+        Uri treeUri;
+        String currentDocumentId = "";
+        String currentTitle = "";
+        TextView selectionView;
+
+        LocalBrowserState(String playlistId, Dialog dialog, LinearLayout root) {
+            this.playlistId = playlistId == null ? "" : playlistId;
+            this.dialog = dialog;
+            this.root = root;
+        }
     }
 
     private static final class EqualizerCandidate {

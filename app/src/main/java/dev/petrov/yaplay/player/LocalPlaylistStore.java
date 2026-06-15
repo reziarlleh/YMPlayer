@@ -31,6 +31,7 @@ public final class LocalPlaylistStore {
 
     private static final String PREFS = "ymp_local_playlists";
     private static final String KEY_PLAYLISTS = "playlists";
+    private static final String KEY_STORAGE_ROOTS = "storage_roots";
     private static final int MAX_FOLDER_TRACKS = 5000;
 
     private final Context context;
@@ -53,6 +54,46 @@ public final class LocalPlaylistStore {
             }
         }
         return null;
+    }
+
+    public synchronized List<StorageRoot> storageRoots() {
+        String json = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(KEY_STORAGE_ROOTS, "[]");
+        List<StorageRoot> roots = new ArrayList<>();
+        try {
+            JSONArray array = new JSONArray(json);
+            for (int i = 0; i < array.length(); i++) {
+                StorageRoot root = StorageRoot.fromJson(array.optJSONObject(i));
+                if (root != null) {
+                    roots.add(root);
+                }
+            }
+        } catch (JSONException ex) {
+            Diagnostics.log(context, "YMP storage root parse failed", ex);
+        }
+        return roots;
+    }
+
+    public synchronized StorageRoot addStorageRoot(Uri treeUri) {
+        if (treeUri == null) {
+            return null;
+        }
+        String uri = treeUri.toString();
+        if (uri.isEmpty()) {
+            return null;
+        }
+        List<StorageRoot> roots = storageRoots();
+        String title = storageRootTitle(context, treeUri);
+        StorageRoot root = new StorageRoot(uri, title);
+        for (int i = 0; i < roots.size(); i++) {
+            if (uri.equals(roots.get(i).uri)) {
+                roots.set(i, root);
+                writeStorageRoots(roots);
+                return root;
+            }
+        }
+        roots.add(root);
+        writeStorageRoots(roots);
+        return root;
     }
 
     public synchronized LocalPlaylist create(String title) {
@@ -417,6 +458,19 @@ public final class LocalPlaylistStore {
                 .apply();
     }
 
+    private void writeStorageRoots(List<StorageRoot> roots) {
+        JSONArray array = new JSONArray();
+        if (roots != null) {
+            for (StorageRoot root : roots) {
+                array.put(root.toJson());
+            }
+        }
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                .edit()
+                .putString(KEY_STORAGE_ROOTS, array.toString())
+                .apply();
+    }
+
     private List<LocalPlaylist> withSystemPlaylists(List<LocalPlaylist> playlists) {
         List<LocalPlaylist> result = new ArrayList<>();
         LocalPlaylist favorites = null;
@@ -481,6 +535,80 @@ public final class LocalPlaylistStore {
             throw new IOException("Unable to scan selected folder", ex);
         }
         return dedupe(tracks);
+    }
+
+    public static List<DocumentItem> listDocumentChildren(Context context, Uri treeUri, String documentId) throws IOException {
+        if (treeUri == null || documentId == null || documentId.isEmpty()) {
+            return new ArrayList<>();
+        }
+        List<DocumentItem> items = new ArrayList<>();
+        ContentResolver resolver = context.getContentResolver();
+        Uri childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, documentId);
+        String[] projection = new String[] {
+                DocumentsContract.Document.COLUMN_DOCUMENT_ID,
+                DocumentsContract.Document.COLUMN_DISPLAY_NAME,
+                DocumentsContract.Document.COLUMN_MIME_TYPE,
+                DocumentsContract.Document.COLUMN_SIZE
+        };
+        try (Cursor cursor = resolver.query(childrenUri, projection, null, null, null)) {
+            if (cursor == null) {
+                return items;
+            }
+            int idIndex = cursor.getColumnIndex(DocumentsContract.Document.COLUMN_DOCUMENT_ID);
+            int nameIndex = cursor.getColumnIndex(DocumentsContract.Document.COLUMN_DISPLAY_NAME);
+            int mimeIndex = cursor.getColumnIndex(DocumentsContract.Document.COLUMN_MIME_TYPE);
+            int sizeIndex = cursor.getColumnIndex(DocumentsContract.Document.COLUMN_SIZE);
+            while (cursor.moveToNext()) {
+                String childId = idIndex < 0 ? "" : cursor.getString(idIndex);
+                String name = nameIndex < 0 ? "" : cursor.getString(nameIndex);
+                String mime = mimeIndex < 0 ? "" : cursor.getString(mimeIndex);
+                long size = sizeIndex < 0 || cursor.isNull(sizeIndex) ? 0L : cursor.getLong(sizeIndex);
+                boolean directory = DocumentsContract.Document.MIME_TYPE_DIR.equals(mime);
+                boolean audio = isAudio(name, mime);
+                if (directory || audio) {
+                    Uri documentUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, childId);
+                    items.add(new DocumentItem(treeUri, documentUri, childId, name, mime, size, directory, audio));
+                }
+            }
+        } catch (Exception ex) {
+            throw new IOException("Unable to list folder", ex);
+        }
+        items.sort((left, right) -> {
+            if (left.directory != right.directory) {
+                return left.directory ? -1 : 1;
+            }
+            return left.name.compareToIgnoreCase(right.name);
+        });
+        return items;
+    }
+
+    public static LocalTrack trackFromDocument(Context context, DocumentItem item) {
+        if (item == null || !item.audio) {
+            return null;
+        }
+        return trackFromUri(context, item.uri, item.name, item.mime, item.size, "");
+    }
+
+    public static String rootDocumentId(Uri treeUri) {
+        if (treeUri == null) {
+            return "";
+        }
+        try {
+            return DocumentsContract.getTreeDocumentId(treeUri);
+        } catch (Exception ignored) {
+            return "";
+        }
+    }
+
+    public static Uri treeUriForDocument(Uri treeUri, String documentId) {
+        if (treeUri == null || documentId == null || documentId.isEmpty()) {
+            return treeUri;
+        }
+        try {
+            return DocumentsContract.buildTreeDocumentUri(treeUri.getAuthority(), documentId);
+        } catch (Exception ignored) {
+            return treeUri;
+        }
     }
 
     public static boolean isLocalTrackKey(String key) {
@@ -711,6 +839,33 @@ public final class LocalPlaylistStore {
         return unique;
     }
 
+    private static String storageRootTitle(Context context, Uri treeUri) {
+        String documentId = rootDocumentId(treeUri);
+        String name = "";
+        try (Cursor cursor = context.getContentResolver().query(
+                DocumentsContract.buildDocumentUriUsingTree(treeUri, documentId),
+                new String[] {DocumentsContract.Document.COLUMN_DISPLAY_NAME},
+                null,
+                null,
+                null
+        )) {
+            if (cursor != null && cursor.moveToFirst()) {
+                int index = cursor.getColumnIndex(DocumentsContract.Document.COLUMN_DISPLAY_NAME);
+                if (index >= 0) {
+                    name = cursor.getString(index);
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        if (name == null || name.trim().isEmpty()) {
+            name = documentId;
+        }
+        if (name == null || name.trim().isEmpty()) {
+            name = "Storage";
+        }
+        return name.trim();
+    }
+
     private static final class Metadata {
         final String title;
         final String artist;
@@ -854,7 +1009,7 @@ public final class LocalPlaylistStore {
             this.sourceTreeUri = sourceTreeUri == null ? "" : sourceTreeUri.trim();
         }
 
-        boolean isPlayable() {
+        public boolean isPlayable() {
             return !uri.isEmpty();
         }
 
@@ -888,6 +1043,76 @@ public final class LocalPlaylistStore {
                     object.optLong("durationMs", 0L),
                     object.optString("sourceTreeUri", "")
             );
+        }
+    }
+
+    public static final class StorageRoot {
+        public final String uri;
+        public final String title;
+
+        StorageRoot(String uri, String title) {
+            this.uri = uri == null ? "" : uri.trim();
+            this.title = title == null || title.trim().isEmpty() ? "Storage" : title.trim();
+        }
+
+        public Uri asUri() {
+            return Uri.parse(uri);
+        }
+
+        JSONObject toJson() {
+            JSONObject object = new JSONObject();
+            try {
+                object.put("uri", uri);
+                object.put("title", title);
+            } catch (JSONException ignored) {
+            }
+            return object;
+        }
+
+        static StorageRoot fromJson(JSONObject object) {
+            if (object == null) {
+                return null;
+            }
+            String uri = object.optString("uri", "");
+            if (uri.isEmpty()) {
+                return null;
+            }
+            return new StorageRoot(uri, object.optString("title", ""));
+        }
+    }
+
+    public static final class DocumentItem {
+        public final Uri treeUri;
+        public final Uri uri;
+        public final String documentId;
+        public final String name;
+        public final String mime;
+        public final long size;
+        public final boolean directory;
+        public final boolean audio;
+
+        DocumentItem(
+                Uri treeUri,
+                Uri uri,
+                String documentId,
+                String name,
+                String mime,
+                long size,
+                boolean directory,
+                boolean audio
+        ) {
+            this.treeUri = treeUri;
+            this.uri = uri;
+            this.documentId = documentId == null ? "" : documentId;
+            this.name = name == null || name.trim().isEmpty() ? "Untitled" : name.trim();
+            this.mime = mime == null ? "" : mime;
+            this.size = Math.max(0L, size);
+            this.directory = directory;
+            this.audio = audio;
+        }
+
+        public Uri asFolderTreeUri() {
+            return treeUriForDocument(treeUri, documentId);
         }
     }
 

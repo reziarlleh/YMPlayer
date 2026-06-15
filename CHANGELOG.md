@@ -3,6 +3,20 @@
 This file tracks only working, testable versions. Broken or experimental
 intermediate builds should not be added here.
 
+## 0.3.5 - 2026-06-15
+
+Built-in local media browser.
+
+- Replaced separate local "Add files" and "Add folder" actions with one Add
+  action.
+- Added YMPlayer's own SAF-based browser for previously granted storage roots.
+- The browser shows folders and audio files with checkboxes, supports folder
+  navigation, and imports the selected files and folders in one pass.
+- Added persistent storage-root history, while keeping Android's system folder
+  picker only for the first permission grant to a new local/USB storage root.
+- Folder selections still integrate with local playlist folder refresh and
+  removed-track exclusions from 0.3.4.
+
 ## 0.3.4 - 2026-06-15
 
 Local playlist management polish.

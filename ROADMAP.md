@@ -58,11 +58,18 @@
 - Added folder source tracking and per-track exclusions so refresh does not
   restore tracks the user removed from a local playlist.
 
+## Completed In 0.3.5
+
+- Replaced separate local file/folder import buttons with a single Add action.
+- Added a built-in checkbox browser for saved Android SAF storage roots.
+- Kept the system folder picker only as the Android permission-grant step for
+  new storage roots, including USB drives.
+
 ## Planned 0.3.x Features
 
-- Add a favorite-artist action when a stable Yandex Music endpoint is confirmed.
 - Improve local playlist management with optional folder diff details and
   better large-playlist editing ergonomics.
+- Add a favorite-artist action when a stable Yandex Music endpoint is confirmed.
 
 ## Research Items
 

@@ -13,11 +13,11 @@ YMPlayer - неофициальный плеер Яндекс Музыки дл�
 
 ## Скачать
 
-Текущая рабочая сборка: **0.3.4**, `versionCode 34`.
+Текущая рабочая сборка: **0.3.5**, `versionCode 35`.
 
-- GitHub Release: [YMPlayer 0.3.4](https://github.com/reziarlleh/YMPlayer/releases/tag/v0.3.4)
-- APK в репозитории: [releases/0.3.4/YMPlayer-v0.3.4-debug-b34.apk](releases/0.3.4/YMPlayer-v0.3.4-debug-b34.apk)
-- Прямая ссылка на APK из релиза: [YMPlayer-v0.3.4-debug-b34.apk](https://github.com/reziarlleh/YMPlayer/releases/download/v0.3.4/YMPlayer-v0.3.4-debug-b34.apk)
+- GitHub Release: [YMPlayer 0.3.5](https://github.com/reziarlleh/YMPlayer/releases/tag/v0.3.5)
+- APK в репозитории: [releases/0.3.5/YMPlayer-v0.3.5-debug-b35.apk](releases/0.3.5/YMPlayer-v0.3.5-debug-b35.apk)
+- Прямая ссылка на APK из релиза: [YMPlayer-v0.3.5-debug-b35.apk](https://github.com/reziarlleh/YMPlayer/releases/download/v0.3.5/YMPlayer-v0.3.5-debug-b35.apk)
 
 Путь `app/build/outputs/apk/debug/...` появляется только после локальной сборки
 через Gradle и не является файлом в GitHub-репозитории.
@@ -42,8 +42,9 @@ YMPlayer - неофициальный плеер Яндекс Музыки дл�
 - Работа с плейлистами аккаунта Яндекс Музыки: выбор, воспроизведение,
   добавление текущего трека, создание нового плейлиста и удаление с
   подтверждением.
-- Локальные плейлисты приложения: добавление файлов и папок через системный
-  выбор Android, включая USB-накопители при наличии доступа.
+- Локальные плейлисты приложения: добавление файлов и папок через собственный
+  браузер YMPlayer с чекбоксами. Для нового хранилища или USB Android всё равно
+  один раз показывает системный SAF-диалог, чтобы выдать приложению доступ.
 - Управление локальными плейлистами: переименование, просмотр треков, удаление
   отдельных треков и обновление ранее импортированных папок.
 - Неудаляемый локальный плейлист "Локальное избранное" для лайкнутых локальных
@@ -129,7 +130,7 @@ $env:Path = "$env:JAVA_HOME\bin;$env:Path"
 После локальной сборки APK будет лежать в:
 
 ```text
-app/build/outputs/apk/debug/YMPlayer-v0.3.4-debug-b34.apk
+app/build/outputs/apk/debug/YMPlayer-v0.3.5-debug-b35.apk
 ```
 
 Этот путь относится только к локальной машине разработчика. На GitHub готовые
