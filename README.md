@@ -13,11 +13,11 @@ YMPlayer - неофициальный плеер Яндекс Музыки дл�
 
 ## Скачать
 
-Текущая рабочая сборка: **0.3.5**, `versionCode 35`.
+Текущая рабочая сборка: **0.3.6**, `versionCode 36`.
 
-- GitHub Release: [YMPlayer 0.3.5](https://github.com/reziarlleh/YMPlayer/releases/tag/v0.3.5)
-- APK в репозитории: [releases/0.3.5/YMPlayer-v0.3.5-debug-b35.apk](releases/0.3.5/YMPlayer-v0.3.5-debug-b35.apk)
-- Прямая ссылка на APK из релиза: [YMPlayer-v0.3.5-debug-b35.apk](https://github.com/reziarlleh/YMPlayer/releases/download/v0.3.5/YMPlayer-v0.3.5-debug-b35.apk)
+- GitHub Release: [YMPlayer 0.3.6](https://github.com/reziarlleh/YMPlayer/releases/tag/v0.3.6)
+- APK в репозитории: [releases/0.3.6/YMPlayer-v0.3.6-debug-b36.apk](releases/0.3.6/YMPlayer-v0.3.6-debug-b36.apk)
+- Прямая ссылка на APK из релиза: [YMPlayer-v0.3.6-debug-b36.apk](https://github.com/reziarlleh/YMPlayer/releases/download/v0.3.6/YMPlayer-v0.3.6-debug-b36.apk)
 
 Путь `app/build/outputs/apk/debug/...` появляется только после локальной сборки
 через Gradle и не является файлом в GitHub-репозитории.
@@ -37,8 +37,9 @@ YMPlayer - неофициальный плеер Яндекс Музыки дл�
 - Синхронизация избранного в локальный кэш с опциями "только Wi-Fi" и "только
   на зарядке".
 - Кнопка очистки локального кэша.
-- Поиск по Яндекс Музыке с воспроизведением найденных треков, альбомов и
-  популярных треков артиста.
+- Поиск по Яндекс Музыке с мини-обложками, воспроизведением найденных треков,
+  альбомов и популярных треков артиста, а также добавлением найденного трека в
+  плейлист Яндекс Музыки.
 - Работа с плейлистами аккаунта Яндекс Музыки: выбор, воспроизведение,
   добавление текущего трека, создание нового плейлиста и удаление с
   подтверждением.
@@ -130,7 +131,7 @@ $env:Path = "$env:JAVA_HOME\bin;$env:Path"
 После локальной сборки APK будет лежать в:
 
 ```text
-app/build/outputs/apk/debug/YMPlayer-v0.3.5-debug-b35.apk
+app/build/outputs/apk/debug/YMPlayer-v0.3.6-debug-b36.apk
 ```
 
 Этот путь относится только к локальной машине разработчика. На GitHub готовые

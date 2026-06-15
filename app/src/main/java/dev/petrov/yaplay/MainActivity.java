@@ -1046,6 +1046,73 @@ public class MainActivity extends Activity {
         dialog.show();
     }
 
+    private void showAddSearchTrackToYandexPlaylistDialog(YandexMusicClient.Track track, Dialog searchDialog) {
+        if (track == null) {
+            return;
+        }
+        if (searchDialog != null) {
+            searchDialog.dismiss();
+        }
+        if (!libraryLoaded) {
+            loadLibrary(true);
+        }
+        Dialog dialog = new Dialog(this);
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+        ScrollView scroll = new ScrollView(this);
+        scroll.setBackgroundColor(COLOR_BG);
+        LinearLayout root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setPadding(dp(18), dp(16), dp(18), dp(18));
+        scroll.addView(root, matchScroll());
+
+        root.addView(sectionTitle(getString(R.string.search_add_track_to_playlist)), matchWrap());
+        addLibraryStatusRow(root, firstNonEmpty(track.artist + " - " + track.title, track.title, track.key));
+
+        EditText title = new EditText(this);
+        title.setHint(R.string.new_yandex_playlist_hint);
+        title.setSingleLine(true);
+        title.setTextColor(COLOR_TEXT);
+        title.setHintTextColor(COLOR_MUTED);
+        title.setBackground(panelBg(COLOR_SURFACE_2, dp(10), COLOR_STROKE));
+        title.setPadding(dp(12), 0, dp(12), 0);
+        root.addView(title, spaced());
+
+        Button create = controlButton(getString(R.string.create_yandex_playlist_and_add), COLOR_ACCENT, COLOR_BG, 52);
+        create.setOnClickListener(v -> {
+            String playlistTitle = title.getText().toString().trim();
+            if (playlistTitle.isEmpty()) {
+                updateStatus(getString(R.string.playlist_name_empty));
+                return;
+            }
+            dialog.dismiss();
+            addSearchTrackToNewYandexPlaylist(track, playlistTitle);
+        });
+        root.addView(create, spaced());
+
+        root.addView(sectionTitle(getString(R.string.section_my_playlists)), spaced());
+        if (cachedPlaylists.isEmpty()) {
+            addLibraryStatusRow(root, getString(libraryLoading
+                    ? R.string.library_loading
+                    : R.string.library_playlists_empty));
+        } else {
+            for (YandexMusicClient.PlaylistSummary playlist : cachedPlaylists) {
+                addLibraryAction(
+                        root,
+                        playlist.title,
+                        getString(R.string.playlist_track_count, playlist.trackCount),
+                        () -> {
+                            dialog.dismiss();
+                            addSearchTrackToYandexPlaylist(track, playlist.kind, playlist.title);
+                        }
+                );
+            }
+        }
+
+        dialog.setContentView(scroll);
+        prepareDialogWindow(dialog, 720);
+        dialog.show();
+    }
+
     private void openStorageRootPicker(String playlistId, Dialog dialog) {
         pendingLocalPlaylistId = playlistId == null ? "" : playlistId;
         Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
@@ -1531,21 +1598,29 @@ public class MainActivity extends Activity {
         scroll.addView(root, matchScroll());
         root.addView(sectionTitle(getString(R.string.search_music)), matchWrap());
 
+        LinearLayout searchBar = row();
+        searchBar.setGravity(Gravity.CENTER_VERTICAL);
+        searchBar.setPadding(dp(12), dp(8), dp(8), dp(8));
+        searchBar.setBackground(panelBg(0xff0d141b, dp(18), COLOR_STROKE));
+        root.addView(searchBar, spaced());
+
         EditText query = new EditText(this);
         query.setHint(R.string.search_hint);
         query.setSingleLine(true);
         query.setTextColor(COLOR_TEXT);
         query.setHintTextColor(COLOR_MUTED);
-        query.setBackground(panelBg(COLOR_SURFACE_2, dp(10), COLOR_STROKE));
-        query.setPadding(dp(12), 0, dp(12), 0);
-        root.addView(query, spaced());
+        query.setTextSize(16);
+        query.setBackgroundColor(Color.TRANSPARENT);
+        query.setPadding(0, 0, dp(10), 0);
+        searchBar.addView(query, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
 
         LinearLayout results = new LinearLayout(this);
         results.setOrientation(LinearLayout.VERTICAL);
 
-        Button search = controlButton(getString(R.string.search_music), COLOR_ACCENT, COLOR_BG, 52);
+        Button search = smallButton(getString(R.string.search_music), COLOR_ACCENT, COLOR_BG);
+        search.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         search.setOnClickListener(v -> runSearch(query.getText().toString(), results, dialog));
-        root.addView(search, spaced());
+        searchBar.addView(search, compactButtonParams(dp(118)));
 
         root.addView(results, matchWrap());
 
@@ -1608,15 +1683,19 @@ public class MainActivity extends Activity {
             int limit = Math.min(12, searchResults.tracks.size());
             for (int i = 0; i < limit; i++) {
                 YandexMusicClient.Track track = searchResults.tracks.get(i);
-                addLibraryAction(
+                addSearchResultRow(
                         results,
                         track.title,
                         firstNonEmpty(track.artist, track.album, track.key),
+                        track.coverUrl,
+                        getString(R.string.search_action_play_track),
                         () -> {
                             sendSearchTrackAction(track);
                             dialog.dismiss();
                             showPlayerPage();
-                        }
+                        },
+                        getString(R.string.search_action_add_to_playlist),
+                        () -> showAddSearchTrackToYandexPlaylistDialog(track, dialog)
                 );
             }
         }
@@ -1628,15 +1707,19 @@ public class MainActivity extends Activity {
                 YandexMusicClient.AlbumInfo album = searchResults.albums.get(i);
                 String subtitle = album.artist
                         + (album.trackCount > 0 ? " - " + getString(R.string.playlist_track_count, album.trackCount) : "");
-                addLibraryAction(
+                addSearchResultRow(
                         results,
                         album.title,
                         subtitle.trim(),
+                        album.coverUrl,
+                        getString(R.string.search_action_play_album),
                         () -> {
                             sendAlbumAction(album);
                             dialog.dismiss();
                             showPlayerPage();
-                        }
+                        },
+                        "",
+                        null
                 );
             }
         }
@@ -1646,18 +1729,88 @@ public class MainActivity extends Activity {
             int limit = Math.min(8, searchResults.artists.size());
             for (int i = 0; i < limit; i++) {
                 YandexMusicClient.ArtistInfo artist = searchResults.artists.get(i);
-                addLibraryAction(
+                addSearchResultRow(
                         results,
                         artist.name,
                         getString(R.string.search_artist_tracks_hint),
+                        artist.coverUrl,
+                        getString(R.string.search_action_play_artist_top),
                         () -> {
                             sendArtistAction(artist);
                             dialog.dismiss();
                             showPlayerPage();
-                        }
+                        },
+                        "",
+                        null
                 );
             }
         }
+    }
+
+    private void addSearchResultRow(
+            LinearLayout root,
+            String title,
+            String subtitle,
+            String coverUrl,
+            String primaryLabel,
+            Runnable primaryAction,
+            String secondaryLabel,
+            Runnable secondaryAction
+    ) {
+        LinearLayout item = new LinearLayout(this);
+        item.setOrientation(LinearLayout.HORIZONTAL);
+        item.setGravity(Gravity.CENTER_VERTICAL);
+        item.setPadding(dp(10), dp(10), dp(10), dp(10));
+        item.setBackground(panelBg(COLOR_SURFACE_2, dp(14), COLOR_STROKE));
+
+        ImageView thumb = new ImageView(this);
+        thumb.setImageResource(R.mipmap.ic_launcher);
+        thumb.setBackground(panelBg(0xff0b1118, dp(10), 0xff25384a));
+        thumb.setScaleType(ImageView.ScaleType.CENTER_CROP);
+        int thumbSize = dp(62);
+        LinearLayout.LayoutParams thumbParams = new LinearLayout.LayoutParams(thumbSize, thumbSize);
+        thumbParams.setMargins(0, 0, dp(12), 0);
+        item.addView(thumb, thumbParams);
+        loadThumbnail(coverUrl, thumb);
+
+        LinearLayout info = new LinearLayout(this);
+        info.setOrientation(LinearLayout.VERTICAL);
+        item.addView(info, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+
+        TextView titleView = new TextView(this);
+        titleView.setText(title == null ? "" : title);
+        titleView.setTextColor(COLOR_TEXT);
+        titleView.setTextSize(15);
+        titleView.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        titleView.setSingleLine(true);
+        titleView.setEllipsize(TextUtils.TruncateAt.END);
+        info.addView(titleView, matchWrap());
+
+        TextView subtitleView = new TextView(this);
+        subtitleView.setText(subtitle == null ? "" : subtitle);
+        subtitleView.setTextColor(COLOR_MUTED);
+        subtitleView.setTextSize(12);
+        subtitleView.setSingleLine(true);
+        subtitleView.setEllipsize(TextUtils.TruncateAt.END);
+        info.addView(subtitleView, matchWrap());
+
+        LinearLayout actions = row();
+        actions.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout.LayoutParams actionParams = matchWrap();
+        actionParams.setMargins(0, dp(8), 0, 0);
+        info.addView(actions, actionParams);
+
+        Button primary = smallButton(primaryLabel, COLOR_ACCENT, COLOR_BG);
+        primary.setOnClickListener(v -> primaryAction.run());
+        actions.addView(primary, rowButtonParams(1f));
+
+        if (secondaryAction != null && secondaryLabel != null && !secondaryLabel.trim().isEmpty()) {
+            Button secondary = smallButton(secondaryLabel, COLOR_SURFACE, COLOR_TEXT);
+            secondary.setOnClickListener(v -> secondaryAction.run());
+            actions.addView(secondary, rowButtonParams(1f));
+        }
+
+        root.addView(item, spaced());
     }
 
     private void prepareDialogWindow(Dialog dialog, int maxWidthDp) {
@@ -2148,6 +2301,46 @@ public class MainActivity extends Activity {
         updateStatus(getString(R.string.search_playing_artist, artist.name));
     }
 
+    private void addSearchTrackToYandexPlaylist(YandexMusicClient.Track track, int kind, String title) {
+        persistTypedToken();
+        updateStatus(getString(R.string.search_add_track_started, track.title));
+        Context appContext = getApplicationContext();
+        new Thread(() -> {
+            try {
+                YandexMusicClient.PlaylistSummary playlist = new YmpRepository(appContext)
+                        .addTrackToPlaylist(kind, track);
+                runOnUiThread(() -> {
+                    libraryLoaded = false;
+                    loadLibrary(true);
+                    updateStatus(getString(R.string.search_track_added_to_playlist, track.title, playlist.title));
+                });
+            } catch (Exception ex) {
+                Diagnostics.log(appContext, "YMP add search track to playlist failed", ex);
+                runOnUiThread(() -> updateStatus(getString(R.string.search_track_add_failed, ex.getMessage())));
+            }
+        }, "YMP-AddSearchTrack").start();
+    }
+
+    private void addSearchTrackToNewYandexPlaylist(YandexMusicClient.Track track, String title) {
+        persistTypedToken();
+        updateStatus(getString(R.string.search_add_track_started, track.title));
+        Context appContext = getApplicationContext();
+        new Thread(() -> {
+            try {
+                YandexMusicClient.PlaylistSummary playlist = new YmpRepository(appContext)
+                        .createPlaylistAndAddTrack(title, track);
+                runOnUiThread(() -> {
+                    libraryLoaded = false;
+                    loadLibrary(true);
+                    updateStatus(getString(R.string.search_track_added_to_playlist, track.title, playlist.title));
+                });
+            } catch (Exception ex) {
+                Diagnostics.log(appContext, "YMP create playlist for search track failed", ex);
+                runOnUiThread(() -> updateStatus(getString(R.string.search_track_add_failed, ex.getMessage())));
+            }
+        }, "YMP-CreatePlaylistForSearchTrack").start();
+    }
+
     private void sendAddCurrentToYandexPlaylistAction(int kind, String title) {
         persistTypedToken();
         Intent intent = new Intent(this, YmpPlaybackService.class);
@@ -2395,6 +2588,63 @@ public class MainActivity extends Activity {
                 }
             }
         }, "YMP-Cover").start();
+    }
+
+    private void loadThumbnail(String coverUrl, ImageView target) {
+        if (target == null) {
+            return;
+        }
+        String url = coverUrl == null ? "" : coverUrl.trim();
+        target.setTag(url);
+        if (url.isEmpty()) {
+            target.setImageResource(R.mipmap.ic_launcher);
+            return;
+        }
+        target.setImageResource(R.mipmap.ic_launcher);
+        Context appContext = getApplicationContext();
+        new Thread(() -> {
+            HttpURLConnection connection = null;
+            try {
+                File cached = coverFile(url);
+                Bitmap cachedBitmap = cached.exists() && cached.length() > 0L
+                        ? BitmapFactory.decodeFile(cached.getAbsolutePath())
+                        : null;
+                if (cachedBitmap != null) {
+                    runOnUiThread(() -> {
+                        if (url.equals(target.getTag())) {
+                            target.setImageBitmap(cachedBitmap);
+                        }
+                    });
+                    return;
+                }
+                connection = (HttpURLConnection) new URL(url).openConnection();
+                connection.setConnectTimeout(8000);
+                connection.setReadTimeout(8000);
+                try (InputStream input = connection.getInputStream()) {
+                    byte[] bytes = readBytes(input);
+                    Bitmap bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.length);
+                    writeCoverCache(cached, bytes);
+                    if (bitmap != null) {
+                        runOnUiThread(() -> {
+                            if (url.equals(target.getTag())) {
+                                target.setImageBitmap(bitmap);
+                            }
+                        });
+                    }
+                }
+            } catch (Exception ex) {
+                Diagnostics.log(appContext, "YMP thumbnail load failed", ex);
+                runOnUiThread(() -> {
+                    if (url.equals(target.getTag())) {
+                        target.setImageResource(R.mipmap.ic_launcher);
+                    }
+                });
+            } finally {
+                if (connection != null) {
+                    connection.disconnect();
+                }
+            }
+        }, "YMP-Thumb").start();
     }
 
     private File coverFile(String coverUrl) {

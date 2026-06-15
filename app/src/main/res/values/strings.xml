@@ -36,6 +36,14 @@
     <string name="search_source_track">Search result</string>
     <string name="search_source_album">Album: %1$s</string>
     <string name="search_source_artist">Artist: %1$s</string>
+    <string name="search_action_play_track">Play</string>
+    <string name="search_action_play_album">Play album</string>
+    <string name="search_action_play_artist_top">Top tracks</string>
+    <string name="search_action_add_to_playlist">To playlist</string>
+    <string name="search_add_track_to_playlist">Add search result to playlist</string>
+    <string name="search_add_track_started">Adding track to playlist: %1$s</string>
+    <string name="search_track_added_to_playlist">Added \"%1$s\" to \"%2$s\"</string>
+    <string name="search_track_add_failed">Track add failed: %1$s</string>
     <string name="section_favorites">Favorites</string>
     <string name="section_my_playlists">My Yandex Music playlists</string>
     <string name="section_local_playlists">Local playlists</string>

@@ -3,6 +3,19 @@
 This file tracks only working, testable versions. Broken or experimental
 intermediate builds should not be added here.
 
+## 0.3.6 - 2026-06-15
+
+Search UI polish.
+
+- Reworked the search entry field into a rounded search bar with the action
+  button inside the frame.
+- Replaced plain text search results with media-style result cards.
+- Added mini cover artwork for track, album, and artist search results.
+- Added explicit result actions: play track, add found track to a Yandex Music
+  playlist, play album, and play artist top tracks.
+- Adding a found track to a playlist can use an existing account playlist or
+  create a new Yandex Music playlist.
+
 ## 0.3.5 - 2026-06-15
 
 Built-in local media browser.

@@ -65,6 +65,13 @@
 - Kept the system folder picker only as the Android permission-grant step for
   new storage roots, including USB drives.
 
+## Completed In 0.3.6
+
+- Polished the search dialog with a rounded search bar.
+- Added mini cover artwork to track, album, and artist search result rows.
+- Added explicit search-result actions, including adding a found track to a
+  Yandex Music playlist.
+
 ## Planned 0.3.x Features
 
 - Improve local playlist management with optional folder diff details and
