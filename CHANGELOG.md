@@ -3,6 +3,24 @@
 This file tracks only working, testable versions. Broken or experimental
 intermediate builds should not be added here.
 
+## 0.4.2 - 2026-06-20
+
+Power menu, playback-position restore, and passive source switching.
+
+- Changed the embedded SideBar power button to use YMPlayer's accessibility
+  service and Android `GLOBAL_ACTION_POWER_DIALOG`, matching the working
+  power-menu path from the standalone SideBar instead of sending the TS18 power
+  key that puts some head units to sleep.
+- Added a settings shortcut to Android Accessibility settings for enabling the
+  YMPlayer power-menu service.
+- Added periodic playback-position persistence while a track is prepared or
+  playing, plus an explicit save on pause, stop, source switch, and service
+  destroy.
+- Source switching now stops the current playback and only selects the next
+  source. The selected My Wave/cache/playlist starts when Play is pressed.
+- YMPlayer now remembers the last track, queue index, position, and queue mode
+  per offline cache, Yandex playlist, and local playlist.
+
 ## 0.4.1 - 2026-06-20
 
 Player state, SideBar parity, artwork, and lighter My Wave prefetch.

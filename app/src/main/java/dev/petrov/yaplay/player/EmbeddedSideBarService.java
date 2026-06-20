@@ -195,7 +195,7 @@ public class EmbeddedSideBarService extends Service {
 
         addPanelButton(panel, horizontal, R.drawable.ic_side_power, "Power", v -> {
             resetAutoHide();
-            Ts18AudioControls.power(this);
+            YmpAccessibilityService.requestPowerDialog(this);
         });
         addPanelButton(panel, horizontal, R.drawable.ic_side_volume_up, "Volume up", v -> {
             resetAutoHide();

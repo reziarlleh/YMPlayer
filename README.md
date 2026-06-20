@@ -13,11 +13,11 @@ YMPlayer - неофициальный плеер Яндекс Музыки дл�
 
 ## Скачать
 
-Текущая рабочая сборка: **0.4.1**, `versionCode 41`.
+Текущая рабочая сборка: **0.4.2**, `versionCode 42`.
 
-- GitHub Release: [YMPlayer 0.4.1](https://github.com/reziarlleh/YMPlayer/releases/tag/v0.4.1)
-- APK в репозитории: [releases/0.4.1/YMPlayer-v0.4.1-debug-b41.apk](releases/0.4.1/YMPlayer-v0.4.1-debug-b41.apk)
-- Прямая ссылка на APK из релиза: [YMPlayer-v0.4.1-debug-b41.apk](https://github.com/reziarlleh/YMPlayer/releases/download/v0.4.1/YMPlayer-v0.4.1-debug-b41.apk)
+- GitHub Release: [YMPlayer 0.4.2](https://github.com/reziarlleh/YMPlayer/releases/tag/v0.4.2)
+- APK в репозитории: [releases/0.4.2/YMPlayer-v0.4.2-debug-b42.apk](releases/0.4.2/YMPlayer-v0.4.2-debug-b42.apk)
+- Прямая ссылка на APK из релиза: [YMPlayer-v0.4.2-debug-b42.apk](https://github.com/reziarlleh/YMPlayer/releases/download/v0.4.2/YMPlayer-v0.4.2-debug-b42.apk)
 
 Путь `app/build/outputs/apk/debug/...` появляется только после локальной сборки
 через Gradle и не является файлом в GitHub-репозитории.
@@ -63,6 +63,8 @@ YMPlayer - неофициальный плеер Яндекс Музыки дл�
 - Кнопка EQ/DSP с выбором найденного приложения эквалайзера.
 - Встроенный SideBar-оверлей для TS18: включается в настройках, показывается и
   скрывается с главного экрана.
+- Кнопка питания встроенного SideBar открывает системное меню выключения и
+  перезагрузки через службу специальных возможностей YMPlayer.
 - TS18-совместимые команды громкости/mute через NWD broadcasts с Android
   AudioManager fallback на обычных устройствах.
 - Диагностика внутри приложения с копированием лога для тестирования на
@@ -115,9 +117,14 @@ YMPlayer - неофициальный плеер Яндекс Музыки дл�
 
 Встроенный SideBar включается в настройках приложения. Для работы оверлея Android
 попросит разрешение "поверх других окон". Панель переносит TS18-подход из
-отдельного проекта SideBar: раскрытие вытягиванием от края, power, громкость,
-mute, home, back и скрытие панели. Размер кнопок в YMPlayer оставлен крупнее
-исходного варианта.
+отдельного проекта SideBar: раскрытие вытягиванием от края, громкость, mute,
+home, back и скрытие панели. Размер кнопок в YMPlayer оставлен крупнее исходного
+варианта.
+
+Для кнопки питания нужно один раз включить службу специальных возможностей
+YMPlayer. В настройках приложения есть кнопка для открытия нужного системного
+экрана. Без этой службы Android не дает обычному overlay-приложению открыть
+системное меню выключения и перезагрузки.
 
 На TS18-магнитолах YMPlayer отправляет `com.nwd.action.ACTION_KEY_VALUE` только
 с `extra_key_value` либо `com.nwd.can.action.ACTION_PLATFORM_SEND_CAN_VOLUME`,
@@ -137,7 +144,7 @@ $env:Path = "$env:JAVA_HOME\bin;$env:Path"
 После локальной сборки APK будет лежать в:
 
 ```text
-app/build/outputs/apk/debug/YMPlayer-v0.4.1-debug-b41.apk
+app/build/outputs/apk/debug/YMPlayer-v0.4.2-debug-b42.apk
 ```
 
 Этот путь относится только к локальной машине разработчика. На GitHub готовые

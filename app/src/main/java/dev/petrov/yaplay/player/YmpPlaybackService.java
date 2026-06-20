@@ -50,6 +50,10 @@ public class YmpPlaybackService extends MediaBrowserService {
     public static final String ACTION_PLAY_LIKED_CACHE = "dev.petrov.yaplay.action.PLAY_LIKED_CACHE";
     public static final String ACTION_PLAY_PLAYLIST = "dev.petrov.yaplay.action.PLAY_PLAYLIST";
     public static final String ACTION_PLAY_LOCAL_PLAYLIST = "dev.petrov.yaplay.action.PLAY_LOCAL_PLAYLIST";
+    public static final String ACTION_SELECT_WAVE = "dev.petrov.yaplay.action.SELECT_WAVE";
+    public static final String ACTION_SELECT_LIKED_CACHE = "dev.petrov.yaplay.action.SELECT_LIKED_CACHE";
+    public static final String ACTION_SELECT_PLAYLIST = "dev.petrov.yaplay.action.SELECT_PLAYLIST";
+    public static final String ACTION_SELECT_LOCAL_PLAYLIST = "dev.petrov.yaplay.action.SELECT_LOCAL_PLAYLIST";
     public static final String ACTION_PLAY_SEARCH_TRACK = "dev.petrov.yaplay.action.PLAY_SEARCH_TRACK";
     public static final String ACTION_PLAY_ALBUM = "dev.petrov.yaplay.action.PLAY_ALBUM";
     public static final String ACTION_PLAY_ARTIST = "dev.petrov.yaplay.action.PLAY_ARTIST";
@@ -95,16 +99,23 @@ public class YmpPlaybackService extends MediaBrowserService {
     public static final String EXTRA_SOURCE_LABEL = "source_label";
     public static final String EXTRA_AUDIO_SESSION_ID = "audio_session_id";
     public static final String EXTRA_POSITION = "position";
+    public static final String EXTRA_SOURCE_SELECTED = "source_selected";
 
     private static final String STATE_PREFS = "ymplayer_playback_state";
     private static final String KEY_HAS_STATE = "has_state";
     private static final String KEY_QUEUE_JSON = "queue_json";
+    private static final String KEY_SOURCE_STATE_PREFIX = "source_state.";
+    private static final String KEY_SOURCE_TRACK = ".track";
+    private static final String KEY_SOURCE_INDEX = ".index";
+    private static final String KEY_SOURCE_POSITION = ".position";
+    private static final String KEY_SOURCE_PLAY_MODE = ".play_mode";
     private static final String CHANNEL_ID = "playback";
     private static final int NOTIFICATION_ID = 2001;
     private static final String ROOT_ID = "ymp_root";
     private static final String MEDIA_ID_WAVE = "ymp_my_wave";
     private static final String MEDIA_ID_LIKED_CACHE = "ymp_liked_cache";
     private static final long SIDEBAR_WATCHDOG_INTERVAL_MS = 30_000L;
+    private static final long POSITION_SAVE_INTERVAL_MS = 2_000L;
     private static final int PLAY_MODE_ORDER = 0;
     private static final int PLAY_MODE_SHUFFLE = 1;
     private static final int PLAY_MODE_REPEAT = 2;
@@ -119,6 +130,15 @@ public class YmpPlaybackService extends MediaBrowserService {
         public void run() {
             ensureSideBar(false);
             mainHandler.postDelayed(this, SIDEBAR_WATCHDOG_INTERVAL_MS);
+        }
+    };
+    private final Runnable positionSaveRunnable = new Runnable() {
+        @Override
+        public void run() {
+            persistCurrentPlaybackState();
+            if (mediaPlayer != null && (prepared || safeIsPlaying())) {
+                mainHandler.postDelayed(this, POSITION_SAVE_INTERVAL_MS);
+            }
         }
     };
 
@@ -213,6 +233,7 @@ public class YmpPlaybackService extends MediaBrowserService {
             updateSession();
             updateNotification();
             broadcastStatus();
+            schedulePositionSave();
             maybePrefetchNextAudio();
             if (forceInitialWavePrefetch) {
                 forceInitialWavePrefetch = false;
@@ -227,6 +248,7 @@ public class YmpPlaybackService extends MediaBrowserService {
             statusText = "Playback error: " + what + "/" + extra;
             loading = false;
             prepared = false;
+            cancelPositionSave();
             updateSession();
             updateNotification();
             broadcastStatus();
@@ -273,6 +295,24 @@ public class YmpPlaybackService extends MediaBrowserService {
                     intent.getStringExtra(EXTRA_LOCAL_PLAYLIST_ID),
                     intent.getStringExtra(EXTRA_LOCAL_PLAYLIST_TITLE)
             );
+        } else if (ACTION_SELECT_WAVE.equals(action)) {
+            selectSourceOnly(SOURCE_WAVE, -1, "", "My Wave");
+        } else if (ACTION_SELECT_LIKED_CACHE.equals(action)) {
+            selectSourceOnly(SOURCE_OFFLINE, -1, "", "Offline mode");
+        } else if (ACTION_SELECT_PLAYLIST.equals(action)) {
+            selectSourceOnly(
+                    SOURCE_PLAYLIST,
+                    intent.getIntExtra(EXTRA_PLAYLIST_KIND, -1),
+                    "",
+                    intent.getStringExtra(EXTRA_PLAYLIST_TITLE)
+            );
+        } else if (ACTION_SELECT_LOCAL_PLAYLIST.equals(action)) {
+            selectSourceOnly(
+                    SOURCE_LOCAL_PLAYLIST,
+                    -1,
+                    intent.getStringExtra(EXTRA_LOCAL_PLAYLIST_ID),
+                    intent.getStringExtra(EXTRA_LOCAL_PLAYLIST_TITLE)
+            );
         } else if (ACTION_PLAY_SEARCH_TRACK.equals(action)) {
             playSearchTrack(
                     intent.getStringExtra(EXTRA_TRACK_KEY),
@@ -315,6 +355,9 @@ public class YmpPlaybackService extends MediaBrowserService {
 
     @Override
     public void onDestroy() {
+        saveCurrentSourceProgress();
+        persistCurrentPlaybackState();
+        cancelPositionSave();
         closePfd();
         if (mediaPlayer != null) {
             mediaPlayer.release();
@@ -404,7 +447,7 @@ public class YmpPlaybackService extends MediaBrowserService {
                     waveQueue = loaded;
                     setQueue(loaded.tracks, SOURCE_WAVE, "My Wave");
                     forceInitialWavePrefetch = true;
-                    playAt(0);
+                    playAt(startIndexForPlayback());
                 });
             } catch (Exception ex) {
                 Diagnostics.log(this, "YMP My Wave load failed", ex);
@@ -427,7 +470,7 @@ public class YmpPlaybackService extends MediaBrowserService {
                     return;
                 }
                 setQueue(tracks, SOURCE_OFFLINE, "Offline mode");
-                playAt(0);
+                playAt(startIndexForPlayback());
             });
         }, "YMP-LoadLikedCache").start();
     }
@@ -441,7 +484,6 @@ public class YmpPlaybackService extends MediaBrowserService {
             return;
         }
         String safeTitle = title == null || title.trim().isEmpty() ? "Playlist " + kind : title.trim();
-        currentPlaylistKind = kind;
         startLoading("Loading playlist: " + safeTitle);
         new Thread(() -> {
             try {
@@ -455,8 +497,8 @@ public class YmpPlaybackService extends MediaBrowserService {
                         broadcastStatus();
                         return;
                     }
-                    setQueue(tracks, SOURCE_PLAYLIST, safeTitle);
-                    playAt(0);
+                    setQueue(tracks, SOURCE_PLAYLIST, safeTitle, kind, "");
+                    playAt(startIndexForPlayback());
                 });
             } catch (Exception ex) {
                 Diagnostics.log(this, "YMP playlist load failed: " + kind, ex);
@@ -471,7 +513,6 @@ public class YmpPlaybackService extends MediaBrowserService {
             return;
         }
         String safeTitle = title == null || title.trim().isEmpty() ? "Local playlist" : title.trim();
-        currentLocalPlaylistId = playlistId;
         startLoading("Loading local playlist: " + safeTitle);
         new Thread(() -> {
             try {
@@ -485,8 +526,8 @@ public class YmpPlaybackService extends MediaBrowserService {
                         broadcastStatus();
                         return;
                     }
-                    setQueue(tracks, SOURCE_LOCAL_PLAYLIST, safeTitle);
-                    playAt(0);
+                    setQueue(tracks, SOURCE_LOCAL_PLAYLIST, safeTitle, -1, playlistId);
+                    playAt(startIndexForPlayback());
                 });
             } catch (Exception ex) {
                 Diagnostics.log(this, "YMP local playlist load failed: " + playlistId, ex);
@@ -515,7 +556,7 @@ public class YmpPlaybackService extends MediaBrowserService {
                         return;
                     }
                     setQueue(tracks, SOURCE_SEARCH, safeTitle);
-                    playAt(0);
+                    playAt(startIndexForPlayback());
                 });
             } catch (Exception ex) {
                 Diagnostics.log(this, "YMP search track load failed: " + trackKey, ex);
@@ -544,7 +585,7 @@ public class YmpPlaybackService extends MediaBrowserService {
                         return;
                     }
                     setQueue(tracks, SOURCE_SEARCH, safeTitle);
-                    playAt(0);
+                    playAt(startIndexForPlayback());
                 });
             } catch (Exception ex) {
                 Diagnostics.log(this, "YMP album load failed: " + albumId, ex);
@@ -573,7 +614,7 @@ public class YmpPlaybackService extends MediaBrowserService {
                         return;
                     }
                     setQueue(tracks, SOURCE_SEARCH, safeTitle);
-                    playAt(0);
+                    playAt(startIndexForPlayback());
                 });
             } catch (Exception ex) {
                 Diagnostics.log(this, "YMP artist load failed: " + artistId, ex);
@@ -582,16 +623,50 @@ public class YmpPlaybackService extends MediaBrowserService {
         }, "YMP-LoadArtist").start();
     }
 
+    private void selectSourceOnly(int sourceType, int playlistKind, String localPlaylistId, String sourceTitle) {
+        saveCurrentSourceProgress();
+        stopPlayerForSourceSwitch();
+        queue.clear();
+        queueIndex = -1;
+        currentSourceType = sourceType;
+        currentPlaylistKind = sourceType == SOURCE_PLAYLIST ? playlistKind : -1;
+        currentLocalPlaylistId = sourceType == SOURCE_LOCAL_PLAYLIST && localPlaylistId != null
+                ? localPlaylistId
+                : "";
+        currentSourceTitle = sourceTitle == null || sourceTitle.trim().isEmpty()
+                ? sourceTitleFor(sourceType)
+                : sourceTitle.trim();
+        waveMode = sourceType == SOURCE_WAVE;
+        if (waveMode) {
+            playMode = PLAY_MODE_ORDER;
+            shuffle = false;
+        }
+        pendingSeekMs = 0L;
+        statusText = currentSourceTitle + " selected. Press Play to start.";
+        updateSession();
+        updateNotification();
+        broadcastStatus(true);
+    }
+
     private void setQueue(List<YandexMusicClient.Track> tracks, int sourceType, String sourceTitle) {
+        setQueue(tracks, sourceType, sourceTitle, currentPlaylistKind, currentLocalPlaylistId);
+    }
+
+    private void setQueue(
+            List<YandexMusicClient.Track> tracks,
+            int sourceType,
+            String sourceTitle,
+            int playlistKind,
+            String localPlaylistId
+    ) {
+        saveCurrentSourceProgress();
         queue.clear();
         queue.addAll(tracks);
         currentSourceType = sourceType;
-        if (sourceType != SOURCE_PLAYLIST) {
-            currentPlaylistKind = -1;
-        }
-        if (sourceType != SOURCE_LOCAL_PLAYLIST) {
-            currentLocalPlaylistId = "";
-        }
+        currentPlaylistKind = sourceType == SOURCE_PLAYLIST ? playlistKind : -1;
+        currentLocalPlaylistId = sourceType == SOURCE_LOCAL_PLAYLIST && localPlaylistId != null
+                ? localPlaylistId
+                : "";
         if (sourceType == SOURCE_LOCAL_PLAYLIST) {
             likedTrackKeys.removeIf(LocalPlaylistStore::isLocalTrackKey);
             likedTrackKeys.addAll(repository.localFavoriteTrackKeys());
@@ -600,7 +675,9 @@ public class YmpPlaybackService extends MediaBrowserService {
                 ? sourceTitleFor(sourceType)
                 : sourceTitle.trim();
         waveMode = sourceType == SOURCE_WAVE;
-        queueIndex = -1;
+        SavedSourceProgress progress = savedProgressFor(sourceType, currentPlaylistKind, currentLocalPlaylistId);
+        queueIndex = restoredQueueIndex(progress);
+        pendingSeekMs = queueIndex >= 0 ? Math.max(0L, progress.positionMs) : 0L;
         prepared = false;
         loading = false;
         prefetchingTrackKey = "";
@@ -611,10 +688,17 @@ public class YmpPlaybackService extends MediaBrowserService {
         if (waveMode) {
             playMode = PLAY_MODE_ORDER;
             shuffle = false;
+        } else if (progress.playMode >= PLAY_MODE_ORDER && progress.playMode <= PLAY_MODE_REPEAT) {
+            playMode = progress.playMode;
+            shuffle = playMode == PLAY_MODE_SHUFFLE;
         }
         statusText = currentSourceTitle + " ready";
         updateSession();
         broadcastStatus();
+    }
+
+    private int startIndexForPlayback() {
+        return queueIndex >= 0 && queueIndex < queue.size() ? queueIndex : 0;
     }
 
     private void playAt(int index) {
@@ -625,6 +709,10 @@ public class YmpPlaybackService extends MediaBrowserService {
             updateNotification();
             broadcastStatus();
             return;
+        }
+        if (index != queueIndex) {
+            saveCurrentSourceProgress();
+            pendingSeekMs = 0L;
         }
         queueIndex = index;
         YandexMusicClient.Track track = queue.get(queueIndex);
@@ -717,13 +805,16 @@ public class YmpPlaybackService extends MediaBrowserService {
         if (mediaPlayer == null) {
             return;
         }
-        if (mediaPlayer.isPlaying()) {
+        if (safeIsPlaying()) {
+            saveCurrentSourceProgress();
             mediaPlayer.pause();
             statusText = "Paused";
+            cancelPositionSave();
         } else if (prepared) {
             ensureForeground();
             mediaPlayer.start();
             statusText = "Playing";
+            schedulePositionSave();
         } else if (!queue.isEmpty()) {
             playAt(queueIndex < 0 ? 0 : queueIndex);
             return;
@@ -921,12 +1012,15 @@ public class YmpPlaybackService extends MediaBrowserService {
     }
 
     private void stopPlayback() {
+        saveCurrentSourceProgress();
+        cancelPositionSave();
         boolean wasPrepared = prepared;
         loading = false;
         prepared = false;
+        pendingSeekMs = 0L;
         if (mediaPlayer != null) {
             try {
-                if (wasPrepared || mediaPlayer.isPlaying()) {
+                if (wasPrepared || safeIsPlaying()) {
                     mediaPlayer.stop();
                 }
             } catch (Exception ex) {
@@ -943,6 +1037,31 @@ public class YmpPlaybackService extends MediaBrowserService {
         updateSession();
         stopForeground(STOP_FOREGROUND_REMOVE);
         broadcastStatus();
+    }
+
+    private void stopPlayerForSourceSwitch() {
+        cancelPositionSave();
+        loading = false;
+        prepared = false;
+        if (mediaPlayer != null) {
+            try {
+                if (safeIsPlaying()) {
+                    mediaPlayer.stop();
+                }
+            } catch (Exception ex) {
+                Diagnostics.log(this, "YMP source-switch stop ignored", ex);
+            }
+            try {
+                mediaPlayer.reset();
+            } catch (Exception ex) {
+                Diagnostics.log(this, "YMP source-switch reset ignored", ex);
+            }
+        }
+        closePfd();
+        try {
+            stopForeground(STOP_FOREGROUND_REMOVE);
+        } catch (Exception ignored) {
+        }
     }
 
     private void toggleShuffle() {
@@ -1138,7 +1257,7 @@ public class YmpPlaybackService extends MediaBrowserService {
         int state;
         if (loading) {
             state = PlaybackState.STATE_BUFFERING;
-        } else if (mediaPlayer != null && mediaPlayer.isPlaying()) {
+        } else if (safeIsPlaying()) {
             state = PlaybackState.STATE_PLAYING;
         } else if (prepared) {
             state = PlaybackState.STATE_PAUSED;
@@ -1314,7 +1433,7 @@ public class YmpPlaybackService extends MediaBrowserService {
         }
 
         builder.addAction(R.drawable.ic_stat_yaplay, "Prev", serviceIntent(ACTION_PREVIOUS, 10));
-        builder.addAction(R.drawable.ic_stat_yaplay, mediaPlayer != null && mediaPlayer.isPlaying() ? "Pause" : "Play",
+        builder.addAction(R.drawable.ic_stat_yaplay, safeIsPlaying() ? "Pause" : "Play",
                 serviceIntent(ACTION_PLAY_PAUSE, 11));
         builder.addAction(R.drawable.ic_stat_yaplay, "Next", serviceIntent(ACTION_NEXT, 12));
         builder.addAction(R.drawable.ic_stat_yaplay, "Stop", serviceIntent(ACTION_STOP, 13));
@@ -1348,6 +1467,17 @@ public class YmpPlaybackService extends MediaBrowserService {
     }
 
     private void broadcastStatus() {
+        broadcastStatus(false);
+    }
+
+    private void broadcastStatus(boolean sourceSelected) {
+        Intent intent = buildStatusIntent(sourceSelected);
+        latestStatus = new Intent(intent);
+        persistPlaybackState(intent);
+        sendBroadcast(intent);
+    }
+
+    private Intent buildStatusIntent(boolean sourceSelected) {
         Intent intent = new Intent(ACTION_STATUS);
         intent.setPackage(getPackageName());
         YandexMusicClient.Track track = currentTrack();
@@ -1360,7 +1490,7 @@ public class YmpPlaybackService extends MediaBrowserService {
         intent.putExtra(EXTRA_INDEX, queueIndex);
         intent.putExtra(EXTRA_WAVE, waveMode);
         intent.putExtra(EXTRA_SHUFFLE, shuffle);
-        intent.putExtra(EXTRA_PLAYING, mediaPlayer != null && mediaPlayer.isPlaying());
+        intent.putExtra(EXTRA_PLAYING, safeIsPlaying());
         intent.putExtra(EXTRA_PREPARED, prepared);
         intent.putExtra(EXTRA_PLAY_MODE, playMode);
         intent.putExtra(EXTRA_LIKED, track != null && isLiked(track));
@@ -1370,14 +1500,13 @@ public class YmpPlaybackService extends MediaBrowserService {
         intent.putExtra(EXTRA_LOCAL_PLAYLIST_ID, currentLocalPlaylistId);
         intent.putExtra(EXTRA_LOCAL_PLAYLIST_TITLE, currentSourceType == SOURCE_LOCAL_PLAYLIST ? currentSourceTitle : "");
         intent.putExtra(EXTRA_TRACK_KEY, track == null ? "" : track.key);
-        long position = (mediaPlayer != null && (prepared || mediaPlayer.isPlaying()))
+        long position = (mediaPlayer != null && (prepared || safeIsPlaying()))
                 ? mediaPlayerPosition()
                 : pendingSeekMs;
         intent.putExtra(EXTRA_POSITION, position);
+        intent.putExtra(EXTRA_SOURCE_SELECTED, sourceSelected);
         intent.putExtra(EXTRA_AUDIO_SESSION_ID, mediaPlayer == null ? 0 : mediaPlayer.getAudioSessionId());
-        latestStatus = new Intent(intent);
-        persistPlaybackState(intent);
-        sendBroadcast(intent);
+        return intent;
     }
 
     private void persistPlaybackState(Intent intent) {
@@ -1411,6 +1540,11 @@ public class YmpPlaybackService extends MediaBrowserService {
         }
     }
 
+    private void persistCurrentPlaybackState() {
+        persistPlaybackState(buildStatusIntent(false));
+        saveCurrentSourceProgress();
+    }
+
     private static String sourceTitleFor(int sourceType) {
         if (sourceType == SOURCE_OFFLINE) {
             return "Offline mode";
@@ -1425,6 +1559,81 @@ public class YmpPlaybackService extends MediaBrowserService {
             return "Search";
         }
         return "My Wave";
+    }
+
+    private void saveCurrentSourceProgress() {
+        YandexMusicClient.Track track = currentTrack();
+        if (track == null || currentSourceType == SOURCE_SEARCH) {
+            return;
+        }
+        String key = sourceStateKey(currentSourceType, currentPlaylistKind, currentLocalPlaylistId);
+        if (key.isEmpty()) {
+            return;
+        }
+        long position = mediaPlayer != null && (prepared || safeIsPlaying())
+                ? mediaPlayerPosition()
+                : pendingSeekMs;
+        getSharedPreferences(STATE_PREFS, MODE_PRIVATE).edit()
+                .putString(key + KEY_SOURCE_TRACK, track.key)
+                .putInt(key + KEY_SOURCE_INDEX, queueIndex)
+                .putLong(key + KEY_SOURCE_POSITION, Math.max(0L, position))
+                .putInt(key + KEY_SOURCE_PLAY_MODE, playMode)
+                .apply();
+    }
+
+    private SavedSourceProgress savedProgressFor(int sourceType, int playlistKind, String localPlaylistId) {
+        String key = sourceStateKey(sourceType, playlistKind, localPlaylistId);
+        if (key.isEmpty()) {
+            return SavedSourceProgress.EMPTY;
+        }
+        SharedPreferences prefs = getSharedPreferences(STATE_PREFS, MODE_PRIVATE);
+        return new SavedSourceProgress(
+                prefs.getString(key + KEY_SOURCE_TRACK, ""),
+                prefs.getInt(key + KEY_SOURCE_INDEX, -1),
+                prefs.getLong(key + KEY_SOURCE_POSITION, 0L),
+                prefs.getInt(key + KEY_SOURCE_PLAY_MODE, PLAY_MODE_ORDER)
+        );
+    }
+
+    private int restoredQueueIndex(SavedSourceProgress progress) {
+        if (progress.trackKey != null && !progress.trackKey.isEmpty()) {
+            for (int i = 0; i < queue.size(); i++) {
+                if (progress.trackKey.equals(queue.get(i).key)) {
+                    return i;
+                }
+            }
+        }
+        return progress.index >= 0 && progress.index < queue.size() ? progress.index : -1;
+    }
+
+    private static String sourceStateKey(int sourceType, int playlistKind, String localPlaylistId) {
+        if (sourceType == SOURCE_OFFLINE) {
+            return KEY_SOURCE_STATE_PREFIX + "offline";
+        }
+        if (sourceType == SOURCE_PLAYLIST && playlistKind >= 0) {
+            return KEY_SOURCE_STATE_PREFIX + "yandex." + playlistKind;
+        }
+        if (sourceType == SOURCE_LOCAL_PLAYLIST && localPlaylistId != null && !localPlaylistId.trim().isEmpty()) {
+            return KEY_SOURCE_STATE_PREFIX + "local." + localPlaylistId.trim();
+        }
+        return "";
+    }
+
+    private void schedulePositionSave() {
+        cancelPositionSave();
+        mainHandler.postDelayed(positionSaveRunnable, POSITION_SAVE_INTERVAL_MS);
+    }
+
+    private void cancelPositionSave() {
+        mainHandler.removeCallbacks(positionSaveRunnable);
+    }
+
+    private boolean safeIsPlaying() {
+        try {
+            return mediaPlayer != null && mediaPlayer.isPlaying();
+        } catch (Exception ignored) {
+            return false;
+        }
     }
 
     private void startSidebarWatchdog() {
@@ -1445,6 +1654,22 @@ public class YmpPlaybackService extends MediaBrowserService {
             return;
         }
         EmbeddedSideBarService.start(this, launchIfNeeded);
+    }
+
+    private static final class SavedSourceProgress {
+        static final SavedSourceProgress EMPTY = new SavedSourceProgress("", -1, 0L, PLAY_MODE_ORDER);
+
+        final String trackKey;
+        final int index;
+        final long positionMs;
+        final int playMode;
+
+        SavedSourceProgress(String trackKey, int index, long positionMs, int playMode) {
+            this.trackKey = trackKey == null ? "" : trackKey;
+            this.index = index;
+            this.positionMs = positionMs;
+            this.playMode = playMode;
+        }
     }
 
     private void createChannel() {

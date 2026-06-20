@@ -2177,6 +2177,7 @@ public class MainActivity extends Activity {
         });
         root.addView(sidebarAutoHideBox, spaced());
         addButton(root, R.string.show_hide_sidebar, v -> toggleEmbeddedSideBar());
+        addButton(root, R.string.open_accessibility_settings, v -> openAccessibilitySettings());
         addButton(root, R.string.open_battery_settings, v -> openBatterySettings());
         addButton(root, R.string.open_autostart_settings, v -> openAutostartSettings());
 
@@ -2211,6 +2212,13 @@ public class MainActivity extends Activity {
         startForegroundService(intent);
     }
 
+    private void sendPlayerSelectAction(String action) {
+        persistTypedToken();
+        Intent intent = new Intent(this, YmpPlaybackService.class);
+        intent.setAction(action);
+        startService(intent);
+    }
+
     private void selectPlaybackSource(boolean wave) {
         selectedSourceType = wave ? YmpPlaybackService.SOURCE_WAVE : YmpPlaybackService.SOURCE_OFFLINE;
         selectedPlaylistKind = -1;
@@ -2221,6 +2229,9 @@ public class MainActivity extends Activity {
         updateSourceButtons();
         updateTransportVisuals();
         updateStatus(getString(wave ? R.string.source_selected_my_wave : R.string.source_selected_offline));
+        sendPlayerSelectAction(wave
+                ? YmpPlaybackService.ACTION_SELECT_WAVE
+                : YmpPlaybackService.ACTION_SELECT_LIKED_CACHE);
     }
 
     private void selectPlaylistSource(int kind, String title) {
@@ -2233,6 +2244,7 @@ public class MainActivity extends Activity {
         updateSourceButtons();
         updateTransportVisuals();
         updateStatus(getString(R.string.source_selected_playlist, selectedPlaylistTitle));
+        sendPlaylistSelectAction(selectedPlaylistKind, selectedPlaylistTitle);
     }
 
     private void selectLocalPlaylistSource(String id, String title) {
@@ -2245,6 +2257,7 @@ public class MainActivity extends Activity {
         updateSourceButtons();
         updateTransportVisuals();
         updateStatus(getString(R.string.source_selected_playlist, selectedLocalPlaylistTitle));
+        sendLocalPlaylistSelectAction(selectedLocalPlaylistId, selectedLocalPlaylistTitle);
     }
 
     private void handlePlayPause() {
@@ -2286,12 +2299,29 @@ public class MainActivity extends Activity {
         startForegroundService(intent);
     }
 
+    private void sendPlaylistSelectAction(int kind, String title) {
+        persistTypedToken();
+        Intent intent = new Intent(this, YmpPlaybackService.class);
+        intent.setAction(YmpPlaybackService.ACTION_SELECT_PLAYLIST);
+        intent.putExtra(YmpPlaybackService.EXTRA_PLAYLIST_KIND, kind);
+        intent.putExtra(YmpPlaybackService.EXTRA_PLAYLIST_TITLE, title == null ? "" : title);
+        startService(intent);
+    }
+
     private void sendLocalPlaylistAction(String id, String title) {
         Intent intent = new Intent(this, YmpPlaybackService.class);
         intent.setAction(YmpPlaybackService.ACTION_PLAY_LOCAL_PLAYLIST);
         intent.putExtra(YmpPlaybackService.EXTRA_LOCAL_PLAYLIST_ID, id == null ? "" : id);
         intent.putExtra(YmpPlaybackService.EXTRA_LOCAL_PLAYLIST_TITLE, title == null ? "" : title);
         startForegroundService(intent);
+    }
+
+    private void sendLocalPlaylistSelectAction(String id, String title) {
+        Intent intent = new Intent(this, YmpPlaybackService.class);
+        intent.setAction(YmpPlaybackService.ACTION_SELECT_LOCAL_PLAYLIST);
+        intent.putExtra(YmpPlaybackService.EXTRA_LOCAL_PLAYLIST_ID, id == null ? "" : id);
+        intent.putExtra(YmpPlaybackService.EXTRA_LOCAL_PLAYLIST_TITLE, title == null ? "" : title);
+        startService(intent);
     }
 
     private void sendSearchTrackAction(YandexMusicClient.Track track) {
@@ -2421,6 +2451,7 @@ public class MainActivity extends Activity {
         boolean prepared = intent.getBooleanExtra(YmpPlaybackService.EXTRA_PREPARED, false);
         int playMode = intent.getIntExtra(YmpPlaybackService.EXTRA_PLAY_MODE, 0);
         boolean liked = intent.getBooleanExtra(YmpPlaybackService.EXTRA_LIKED, false);
+        boolean sourceSelected = intent.getBooleanExtra(YmpPlaybackService.EXTRA_SOURCE_SELECTED, false);
         currentAudioSessionId = intent.getIntExtra(YmpPlaybackService.EXTRA_AUDIO_SESSION_ID, currentAudioSessionId);
 
         currentWaveMode = wave;
@@ -2429,7 +2460,7 @@ public class MainActivity extends Activity {
         currentPrepared = prepared;
         currentLiked = liked;
         currentPlayMode = playMode;
-        if (playing || prepared || queue > 0 || (title != null && !title.isEmpty())) {
+        if (sourceSelected || playing || prepared || queue > 0 || (title != null && !title.isEmpty())) {
             selectedSourceType = sourceType;
             selectedWaveMode = sourceType == YmpPlaybackService.SOURCE_WAVE;
             if (sourceType == YmpPlaybackService.SOURCE_PLAYLIST) {
@@ -2448,6 +2479,11 @@ public class MainActivity extends Activity {
             } else if (sourceType == YmpPlaybackService.SOURCE_SEARCH) {
                 selectedPlaylistKind = -1;
                 selectedPlaylistTitle = sourceTitle == null ? getString(R.string.source_search) : sourceTitle;
+                selectedLocalPlaylistId = "";
+                selectedLocalPlaylistTitle = "";
+            } else {
+                selectedPlaylistKind = -1;
+                selectedPlaylistTitle = "";
                 selectedLocalPlaylistId = "";
                 selectedLocalPlaylistTitle = "";
             }
@@ -2884,6 +2920,15 @@ public class MainActivity extends Activity {
                 || tryStartSettings(new Intent(Settings.ACTION_BATTERY_SAVER_SETTINGS))
                 || openAppDetailsSettings()) {
             updateStatus(statusWithCache("Opened battery settings"));
+            return;
+        }
+        updateStatus(statusWithCache(getString(R.string.system_settings_open_failed)));
+        Toast.makeText(this, R.string.system_settings_open_failed, Toast.LENGTH_SHORT).show();
+    }
+
+    private void openAccessibilitySettings() {
+        if (tryStartSettings(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))) {
+            updateStatus(statusWithCache(getString(R.string.accessibility_power_required)));
             return;
         }
         updateStatus(statusWithCache(getString(R.string.system_settings_open_failed)));

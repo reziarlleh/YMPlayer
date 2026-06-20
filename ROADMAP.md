@@ -98,6 +98,17 @@
 - Fixed stale MediaSession artwork after shuffle track changes.
 - Reduced My Wave queue expansion to one next track instead of larger batches.
 
+## Completed In 0.4.2
+
+- Moved embedded SideBar power-menu handling to YMPlayer's accessibility
+  service so the button opens the system power/reboot dialog instead of sending
+  a TS18 sleep key.
+- Added periodic and lifecycle-based playback-position persistence.
+- Made source switching passive: selecting My Wave, cache, or a playlist stops
+  current playback and waits for Play before starting the selected source.
+- Added remembered last track, index, position, and queue mode per offline
+  cache, Yandex playlist, and local playlist.
+
 ## Planned 0.4.x Features
 
 - Improve local playlist management with optional folder diff details and

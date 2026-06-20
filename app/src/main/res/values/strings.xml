@@ -140,7 +140,10 @@
     <string name="restart_sidebar">Restart SideBar now</string>
     <string name="enable_embedded_sidebar">Enable built-in SideBar overlay</string>
     <string name="sidebar_auto_hide">Auto-hide SideBar after inactivity</string>
+    <string name="accessibility_power_required">Enable YMPlayer accessibility service for the power menu button</string>
+    <string name="accessibility_power_description">Allows YMPlayer SideBar to open the Android power menu from its power button.</string>
     <string name="show_hide_sidebar">Show/hide SideBar</string>
+    <string name="open_accessibility_settings">Open accessibility settings for power menu</string>
     <string name="open_battery_settings">Open battery settings</string>
     <string name="open_autostart_settings">Open autostart settings</string>
     <string name="system_settings_open_failed">Could not open system settings</string>
