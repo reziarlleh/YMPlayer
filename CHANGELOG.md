@@ -3,6 +3,22 @@
 This file tracks only working, testable versions. Broken or experimental
 intermediate builds should not be added here.
 
+## 0.4.4 - 2026-06-20
+
+Legacy cleanup and local artwork polish.
+
+- Removed the active Poweramp-era cache sync path: `CacheSyncService` now uses
+  the standalone YMPlayer repository and keeps permanent sync limited to global
+  liked tracks.
+- Moved `YandexTrackCache` into the neutral `dev.petrov.yaplay.cache` package
+  while preserving the existing on-device cache directories.
+- Deleted unused Poweramp provider/tree-picker classes and obsolete
+  `tree_picker_*` strings.
+- The main player screen now reads embedded artwork from local files when there
+  is no remote cover URL.
+- Settings now show whether the YMPlayer Accessibility service needed for the
+  SideBar power menu is enabled.
+
 ## 0.4.3 - 2026-06-20
 
 Artwork fallback fix for CarWebGuru and YMPlayer.

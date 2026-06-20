@@ -13,11 +13,11 @@ YMPlayer - неофициальный плеер Яндекс Музыки дл�
 
 ## Скачать
 
-Текущая рабочая сборка: **0.4.3**, `versionCode 43`.
+Текущая рабочая сборка: **0.4.4**, `versionCode 44`.
 
-- GitHub Release: [YMPlayer 0.4.3](https://github.com/reziarlleh/YMPlayer/releases/tag/v0.4.3)
-- APK в репозитории: [releases/0.4.3/YMPlayer-v0.4.3-debug-b43.apk](releases/0.4.3/YMPlayer-v0.4.3-debug-b43.apk)
-- Прямая ссылка на APK из релиза: [YMPlayer-v0.4.3-debug-b43.apk](https://github.com/reziarlleh/YMPlayer/releases/download/v0.4.3/YMPlayer-v0.4.3-debug-b43.apk)
+- GitHub Release: [YMPlayer 0.4.4](https://github.com/reziarlleh/YMPlayer/releases/tag/v0.4.4)
+- APK в репозитории: [releases/0.4.4/YMPlayer-v0.4.4-debug-b44.apk](releases/0.4.4/YMPlayer-v0.4.4-debug-b44.apk)
+- Прямая ссылка на APK из релиза: [YMPlayer-v0.4.4-debug-b44.apk](https://github.com/reziarlleh/YMPlayer/releases/download/v0.4.4/YMPlayer-v0.4.4-debug-b44.apk)
 
 Путь `app/build/outputs/apk/debug/...` появляется только после локальной сборки
 через Gradle и не является файлом в GitHub-репозитории.
@@ -147,7 +147,7 @@ $env:Path = "$env:JAVA_HOME\bin;$env:Path"
 После локальной сборки APK будет лежать в:
 
 ```text
-app/build/outputs/apk/debug/YMPlayer-v0.4.3-debug-b43.apk
+app/build/outputs/apk/debug/YMPlayer-v0.4.4-debug-b44.apk
 ```
 
 Этот путь относится только к локальной машине разработчика. На GitHub готовые

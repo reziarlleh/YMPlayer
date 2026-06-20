@@ -17,7 +17,7 @@ import android.os.BatteryManager;
 import android.os.Build;
 import android.os.IBinder;
 
-import dev.petrov.yaplay.poweramp.YandexMusicRepository;
+import dev.petrov.yaplay.player.YmpRepository;
 
 public class CacheSyncService extends Service {
     public static final String ACTION_SYNC = "dev.petrov.yaplay.action.CACHE_SYNC";
@@ -55,7 +55,7 @@ public class CacheSyncService extends Service {
         }
 
         boolean includeLiked = intent == null || intent.getBooleanExtra(EXTRA_INCLUDE_LIKED, true);
-        boolean includePlaylists = intent == null || intent.getBooleanExtra(EXTRA_INCLUDE_PLAYLISTS, true);
+        boolean includePlaylists = intent != null && intent.getBooleanExtra(EXTRA_INCLUDE_PLAYLISTS, false);
         boolean wifiOnly = intent != null && intent.getBooleanExtra(EXTRA_WIFI_ONLY, true);
         boolean chargingOnly = intent != null && intent.getBooleanExtra(EXTRA_CHARGING_ONLY, false);
 
@@ -83,7 +83,7 @@ public class CacheSyncService extends Service {
 
         running = true;
         cancelRequested = false;
-        worker = new Thread(() -> runSync(includeLiked, includePlaylists), "YaPlayCacheSyncService");
+        worker = new Thread(() -> runSync(includeLiked, includePlaylists), "YMP-CacheSyncService");
         worker.start();
         return START_NOT_STICKY;
     }
@@ -102,9 +102,16 @@ public class CacheSyncService extends Service {
     }
 
     private void runSync(boolean includeLiked, boolean includePlaylists) {
-        YandexMusicRepository repository = YandexMusicRepository.get(this);
+        YmpRepository repository = new YmpRepository(this);
         try {
-            YandexMusicRepository.CacheSyncResult result = repository.syncCache(includeLiked, includePlaylists, new YandexMusicRepository.CacheProgress() {
+            if (!includeLiked) {
+                updateStatus("Favorite cache sync skipped: liked tracks are disabled");
+                return;
+            }
+            if (includePlaylists) {
+                Diagnostics.log(this, "Cache service ignored playlist caching request: permanent cache is liked-only");
+            }
+            YmpRepository.CacheSyncResult result = repository.syncFavoriteCache(new YmpRepository.CacheProgress() {
                 @Override
                 public void onProgress(String message) {
                     updateStatus(message);

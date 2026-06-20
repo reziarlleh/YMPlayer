@@ -15,7 +15,7 @@ import java.util.Locale;
 import java.util.Set;
 
 import dev.petrov.yaplay.Diagnostics;
-import dev.petrov.yaplay.poweramp.YandexTrackCache;
+import dev.petrov.yaplay.cache.YandexTrackCache;
 import dev.petrov.yaplay.ymusic.TokenStore;
 import dev.petrov.yaplay.ymusic.YandexMusicClient;
 
@@ -330,6 +330,54 @@ public final class YmpRepository {
         return new HashSet<>(client().getLikedTrackKeys(account().uid));
     }
 
+    public synchronized CacheSyncResult syncFavoriteCache(CacheProgress progress) throws Exception {
+        Diagnostics.log(context, "YMP favorite cache sync started");
+        YandexMusicClient client = client();
+        long uid = account().uid;
+        Map<String, YandexMusicClient.Track> unique = new LinkedHashMap<>();
+
+        notifyProgress(progress, "Loading favorite tracks...");
+        addUnique(unique, client.getLikedTracks(uid));
+        int removed = audioCache.pruneLikedTracks(unique.keySet());
+        if (removed > 0) {
+            notifyProgress(progress, "Removed " + removed + " tracks no longer in favorites");
+        }
+
+        int downloaded = 0;
+        int skipped = 0;
+        int failed = 0;
+        int index = 1;
+        for (YandexMusicClient.Track track : unique.values()) {
+            if (isCancelled(progress)) {
+                CacheSyncResult result = new CacheSyncResult(unique.size(), downloaded, skipped, failed, removed, true);
+                Diagnostics.log(context, result.summaryText());
+                return result;
+            }
+            if (audioCache.hasLikedTrack(track.key)) {
+                skipped++;
+                notifyProgress(progress, "Cached " + index + "/" + unique.size() + " already: "
+                        + track.artist + " - " + track.title);
+            } else {
+                notifyProgress(progress, "Downloading " + index + "/" + unique.size() + ": "
+                        + track.artist + " - " + track.title);
+                try {
+                    audioCache.cacheLiked(client, track);
+                    downloaded++;
+                } catch (Exception ex) {
+                    failed++;
+                    Diagnostics.log(context, "YMP unable to cache liked track " + track.key, ex);
+                    notifyProgress(progress, "Failed " + index + "/" + unique.size() + ": "
+                            + track.title + " (" + ex.getMessage() + ")");
+                }
+            }
+            index++;
+        }
+
+        CacheSyncResult result = new CacheSyncResult(unique.size(), downloaded, skipped, failed, removed, false);
+        Diagnostics.log(context, result.summaryText());
+        return result;
+    }
+
     public synchronized ParcelFileDescriptor openForPlayback(YandexMusicClient.Track track) throws Exception {
         if (track != null && LocalPlaylistStore.isLocalTrackKey(track.key)) {
             Uri uri = LocalPlaylistStore.uriFromTrackKey(track.key);
@@ -405,6 +453,27 @@ public final class YmpRepository {
 
     private YandexMusicClient client() {
         return new YandexMusicClient(TokenStore.getAccessToken(context));
+    }
+
+    private static void addUnique(Map<String, YandexMusicClient.Track> target, List<YandexMusicClient.Track> tracks) {
+        if (target == null || tracks == null) {
+            return;
+        }
+        for (YandexMusicClient.Track track : tracks) {
+            if (track != null && track.key != null && !track.key.isEmpty()) {
+                target.put(track.key, track);
+            }
+        }
+    }
+
+    private static void notifyProgress(CacheProgress progress, String message) {
+        if (progress != null) {
+            progress.onProgress(message);
+        }
+    }
+
+    private static boolean isCancelled(CacheProgress progress) {
+        return progress != null && progress.isCancelled();
     }
 
     private static String formatBytes(long bytes) {
@@ -529,6 +598,39 @@ public final class YmpRepository {
                 }
             }
             return false;
+        }
+    }
+
+    public interface CacheProgress {
+        void onProgress(String message);
+
+        boolean isCancelled();
+    }
+
+    public static final class CacheSyncResult {
+        public final int total;
+        public final int downloaded;
+        public final int skipped;
+        public final int failed;
+        public final int removed;
+        public final boolean cancelled;
+
+        CacheSyncResult(int total, int downloaded, int skipped, int failed, int removed, boolean cancelled) {
+            this.total = total;
+            this.downloaded = downloaded;
+            this.skipped = skipped;
+            this.failed = failed;
+            this.removed = removed;
+            this.cancelled = cancelled;
+        }
+
+        public String summaryText() {
+            String status = cancelled ? "Cache sync cancelled" : "Cache sync complete";
+            return status + ": favorites " + total
+                    + ", downloaded " + downloaded
+                    + ", already cached " + skipped
+                    + ", removed non-favorites " + removed
+                    + ", failed " + failed;
         }
     }
 }

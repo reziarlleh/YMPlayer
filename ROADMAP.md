@@ -116,13 +116,25 @@
 - Reset the main player cover to the default icon immediately while a newly
   selected track cover is loading.
 
+## Completed In 0.4.4
+
+- Removed the active Poweramp-era cache synchronization path and routed liked
+  cache sync through the standalone YMPlayer repository.
+- Moved the reusable Yandex track cache class into a neutral cache package
+  without changing existing storage directories.
+- Deleted unused Poweramp provider/tree-picker classes and obsolete strings.
+- Added embedded local-file artwork loading on the main player screen.
+- Added a visible settings status for the YMPlayer Accessibility service used
+  by the embedded SideBar power menu.
+
 ## Planned 0.4.x Features
 
-- Keep 0.4.x focused on stabilization while the user tests 0.4.3 on a real
+- Keep 0.4.x focused on stabilization while the user tests 0.4.4 on a real
   device.
 - Current audit and prioritized fix list: [PROJECT_AUDIT.md](PROJECT_AUDIT.md).
-- Highest-priority cleanup is removing the remaining active Poweramp-era cache
-  path without changing the existing liked-track cache directories.
+- Next cleanup priority is reducing stale background UI updates with a shared
+  executor and simple cancellation tokens for search/import/source-loading
+  operations.
 - Improve local playlist management with optional folder diff details and
   better large-playlist editing ergonomics.
 - Add a favorite-artist action only when a stable Yandex Music endpoint is

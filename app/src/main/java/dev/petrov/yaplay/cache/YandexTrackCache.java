@@ -1,4 +1,4 @@
-package dev.petrov.yaplay.poweramp;
+package dev.petrov.yaplay.cache;
 
 import android.content.Context;
 import android.os.ParcelFileDescriptor;

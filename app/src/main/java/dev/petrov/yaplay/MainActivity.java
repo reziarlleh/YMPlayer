@@ -21,6 +21,7 @@ import android.graphics.Typeface;
 import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.GradientDrawable;
 import android.media.AudioManager;
+import android.media.MediaMetadataRetriever;
 import android.media.audiofx.AudioEffect;
 import android.net.Uri;
 import android.os.Build;
@@ -66,6 +67,7 @@ import dev.petrov.yaplay.player.Ts18AudioControls;
 import dev.petrov.yaplay.player.EmbeddedSideBarService;
 import dev.petrov.yaplay.player.LocalArtworkEnricher;
 import dev.petrov.yaplay.player.LocalPlaylistStore;
+import dev.petrov.yaplay.player.YmpAccessibilityService;
 import dev.petrov.yaplay.player.YmpPlaybackService;
 import dev.petrov.yaplay.player.YmpRepository;
 import dev.petrov.yaplay.player.YmpSettings;
@@ -2177,6 +2179,9 @@ public class MainActivity extends Activity {
         });
         root.addView(sidebarAutoHideBox, spaced());
         addButton(root, R.string.show_hide_sidebar, v -> toggleEmbeddedSideBar());
+        addLibraryStatusRow(root, getString(YmpAccessibilityService.isEnabled(this)
+                ? R.string.accessibility_power_status_enabled
+                : R.string.accessibility_power_status_disabled));
         addButton(root, R.string.open_accessibility_settings, v -> openAccessibilitySettings());
         addButton(root, R.string.open_battery_settings, v -> openBatterySettings());
         addButton(root, R.string.open_autostart_settings, v -> openAutostartSettings());
@@ -2437,6 +2442,7 @@ public class MainActivity extends Activity {
         String artist = intent.getStringExtra(YmpPlaybackService.EXTRA_ARTIST);
         String album = intent.getStringExtra(YmpPlaybackService.EXTRA_ALBUM);
         String coverUrl = intent.getStringExtra(YmpPlaybackService.EXTRA_COVER_URL);
+        String trackKey = intent.getStringExtra(YmpPlaybackService.EXTRA_TRACK_KEY);
         String status = intent.getStringExtra(YmpPlaybackService.EXTRA_STATUS);
         int queue = intent.getIntExtra(YmpPlaybackService.EXTRA_QUEUE, 0);
         int index = intent.getIntExtra(YmpPlaybackService.EXTRA_INDEX, -1);
@@ -2492,7 +2498,7 @@ public class MainActivity extends Activity {
         nowTitleView.setText(title == null || title.isEmpty() ? getString(R.string.now_playing_empty) : title);
         nowArtistView.setText(artist == null ? "" : artist);
         nowAlbumView.setText(album == null || album.isEmpty() ? "" : getString(R.string.album_template, album));
-        loadCover(coverUrl);
+        loadCover(coverUrl, trackKey);
         String source = sourceTitleFor(sourceType, sourceTitle);
         modeView.setText(source);
         queueView.setText(getString(
@@ -2615,14 +2621,19 @@ public class MainActivity extends Activity {
         }
     }
 
-    private void loadCover(String coverUrl) {
+    private void loadCover(String coverUrl, String trackKey) {
         String url = coverUrl == null ? "" : coverUrl.trim();
-        if (coverView == null || url.equals(latestCoverUrl)) {
+        String localKey = trackKey == null ? "" : trackKey.trim();
+        String identity = url.isEmpty() && LocalPlaylistStore.isLocalTrackKey(localKey) ? localKey : url;
+        if (coverView == null || identity.equals(latestCoverUrl)) {
             return;
         }
-        latestCoverUrl = url;
+        latestCoverUrl = identity;
         coverView.setImageResource(R.mipmap.ic_launcher);
         if (url.isEmpty()) {
+            if (LocalPlaylistStore.isLocalTrackKey(localKey)) {
+                loadLocalCover(localKey, identity);
+            }
             return;
         }
         Context appContext = getApplicationContext();
@@ -2633,7 +2644,7 @@ public class MainActivity extends Activity {
                 Bitmap cachedBitmap = cached.exists() && cached.length() > 0L
                         ? BitmapFactory.decodeFile(cached.getAbsolutePath())
                         : null;
-                if (cachedBitmap != null && url.equals(latestCoverUrl)) {
+                if (cachedBitmap != null && identity.equals(latestCoverUrl)) {
                     runOnUiThread(() -> coverView.setImageBitmap(cachedBitmap));
                     return;
                 }
@@ -2644,13 +2655,13 @@ public class MainActivity extends Activity {
                     byte[] bytes = readBytes(input);
                     Bitmap bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.length);
                     writeCoverCache(cached, bytes);
-                    if (bitmap != null && url.equals(latestCoverUrl)) {
+                    if (bitmap != null && identity.equals(latestCoverUrl)) {
                         runOnUiThread(() -> coverView.setImageBitmap(bitmap));
                     }
                 }
             } catch (Exception ex) {
                 Diagnostics.log(appContext, "YMP cover load failed", ex);
-                if (url.equals(latestCoverUrl)) {
+                if (identity.equals(latestCoverUrl)) {
                     runOnUiThread(() -> coverView.setImageResource(R.mipmap.ic_launcher));
                 }
             } finally {
@@ -2659,6 +2670,37 @@ public class MainActivity extends Activity {
                 }
             }
         }, "YMP-Cover").start();
+    }
+
+    private void loadLocalCover(String localTrackKey, String identity) {
+        Context appContext = getApplicationContext();
+        new Thread(() -> {
+            Bitmap bitmap = null;
+            try {
+                Uri uri = LocalPlaylistStore.uriFromTrackKey(localTrackKey);
+                if (uri != null) {
+                    MediaMetadataRetriever retriever = new MediaMetadataRetriever();
+                    try {
+                        retriever.setDataSource(appContext, uri);
+                        byte[] bytes = retriever.getEmbeddedPicture();
+                        if (bytes != null && bytes.length > 0) {
+                            bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.length);
+                        }
+                    } finally {
+                        try {
+                            retriever.release();
+                        } catch (Exception ignored) {
+                        }
+                    }
+                }
+            } catch (Exception ex) {
+                Diagnostics.log(appContext, "YMP local cover load failed", ex);
+            }
+            Bitmap loaded = bitmap;
+            if (loaded != null && identity.equals(latestCoverUrl)) {
+                runOnUiThread(() -> coverView.setImageBitmap(loaded));
+            }
+        }, "YMP-LocalCover").start();
     }
 
     private void loadThumbnail(String coverUrl, ImageView target) {
