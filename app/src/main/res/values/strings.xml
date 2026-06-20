@@ -139,6 +139,7 @@
     <string name="keep_sidebar_alive">Keep SideBar alive while YMPlayer is running</string>
     <string name="restart_sidebar">Restart SideBar now</string>
     <string name="enable_embedded_sidebar">Enable built-in SideBar overlay</string>
+    <string name="sidebar_auto_hide">Auto-hide SideBar after inactivity</string>
     <string name="show_hide_sidebar">Show/hide SideBar</string>
     <string name="open_battery_settings">Open battery settings</string>
     <string name="open_autostart_settings">Open autostart settings</string>
@@ -158,7 +159,6 @@
     <string name="sidebar_quick_toggle">Show or hide SideBar</string>
     <string name="sidebar_disabled_status">SideBar is disabled in settings</string>
     <string name="sidebar_overlay_permission_required">Allow YMPlayer to draw over other apps, then enable SideBar again</string>
-    <string name="sidebar_power_menu_failed">Power menu is blocked by this firmware</string>
     <string name="auto_cache_liked_tracks">Automatically download liked tracks to local cache</string>
     <string name="stream_quality_template">Online quality: %1$s</string>
     <string name="cache_quality_template">Cache quality: %1$s</string>

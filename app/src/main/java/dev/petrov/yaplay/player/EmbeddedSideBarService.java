@@ -1,7 +1,6 @@
 package dev.petrov.yaplay.player;
 
 import android.Manifest;
-import android.annotation.SuppressLint;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
@@ -29,9 +28,7 @@ import android.view.WindowManager;
 import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
-import android.widget.Toast;
 
-import java.lang.reflect.Method;
 import java.util.EnumMap;
 import java.util.Map;
 
@@ -196,14 +193,9 @@ public class EmbeddedSideBarService extends Service {
             return false;
         });
 
-        ImageButton powerButton = addPanelButton(panel, horizontal, R.drawable.ic_side_power, "Power", v -> {
+        addPanelButton(panel, horizontal, R.drawable.ic_side_power, "Power", v -> {
             resetAutoHide();
             Ts18AudioControls.power(this);
-        });
-        powerButton.setOnLongClickListener(v -> {
-            resetAutoHide();
-            openSystemPowerMenu();
-            return true;
         });
         addPanelButton(panel, horizontal, R.drawable.ic_side_volume_up, "Volume up", v -> {
             resetAutoHide();
@@ -248,54 +240,9 @@ public class EmbeddedSideBarService extends Service {
         return button;
     }
 
-    private void openSystemPowerMenu() {
-        if (tryStatusBarGlobalActions() || tryShutdownRequest() || tryPowerKeyLongPress()) {
-            Diagnostics.log(this, "YMP embedded SideBar power menu requested");
-            return;
-        }
-        Diagnostics.log(this, "YMP embedded SideBar power menu failed");
-        Toast.makeText(this, R.string.sidebar_power_menu_failed, Toast.LENGTH_SHORT).show();
-    }
-
-    @SuppressLint("WrongConstant")
-    private boolean tryStatusBarGlobalActions() {
-        try {
-            Object service = getSystemService("statusbar");
-            if (service == null) {
-                return false;
-            }
-            Method method = service.getClass().getMethod("showGlobalActions");
-            method.invoke(service);
-            return true;
-        } catch (Exception ex) {
-            return false;
-        }
-    }
-
-    private boolean tryShutdownRequest() {
-        try {
-            Intent intent = new Intent("android.intent.action.ACTION_REQUEST_SHUTDOWN")
-                    .putExtra("android.intent.extra.KEY_CONFIRM", true)
-                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            startActivity(intent);
-            return true;
-        } catch (Exception ex) {
-            return false;
-        }
-    }
-
-    private boolean tryPowerKeyLongPress() {
-        try {
-            Runtime.getRuntime().exec(new String[] {"sh", "-c", "input keyevent --longpress 26"});
-            return true;
-        } catch (Exception ex) {
-            return false;
-        }
-    }
-
     private WindowManager.LayoutParams collapsedParams(Edge edge) {
-        int width = edge == Edge.BOTTOM ? (int) (getResources().getDisplayMetrics().widthPixels * 0.58f) : 5;
-        int height = edge == Edge.BOTTOM ? 5 : (int) (getResources().getDisplayMetrics().heightPixels * 0.58f);
+        int width = edge == Edge.BOTTOM ? (int) (getResources().getDisplayMetrics().widthPixels * 0.6f) : dp(52);
+        int height = edge == Edge.BOTTOM ? dp(56) : (int) (getResources().getDisplayMetrics().heightPixels * 0.6f);
         WindowManager.LayoutParams params = new WindowManager.LayoutParams(
                 width,
                 height,
@@ -374,6 +321,9 @@ public class EmbeddedSideBarService extends Service {
 
     private void scheduleAutoHide() {
         cancelAutoHide();
+        if (!YmpSettings.isEmbeddedSideBarAutoHideEnabled(this)) {
+            return;
+        }
         View panel = panelView;
         if (panel == null) {
             return;
@@ -387,7 +337,7 @@ public class EmbeddedSideBarService extends Service {
     }
 
     private void resetAutoHide() {
-        if (panelView != null) {
+        if (panelView != null && YmpSettings.isEmbeddedSideBarAutoHideEnabled(this)) {
             scheduleAutoHide();
         }
     }

@@ -13,11 +13,11 @@ YMPlayer - неофициальный плеер Яндекс Музыки дл�
 
 ## Скачать
 
-Текущая рабочая сборка: **0.4.0**, `versionCode 40`.
+Текущая рабочая сборка: **0.4.1**, `versionCode 41`.
 
-- GitHub Release: [YMPlayer 0.4.0](https://github.com/reziarlleh/YMPlayer/releases/tag/v0.4.0)
-- APK в репозитории: [releases/0.4.0/YMPlayer-v0.4.0-debug-b40.apk](releases/0.4.0/YMPlayer-v0.4.0-debug-b40.apk)
-- Прямая ссылка на APK из релиза: [YMPlayer-v0.4.0-debug-b40.apk](https://github.com/reziarlleh/YMPlayer/releases/download/v0.4.0/YMPlayer-v0.4.0-debug-b40.apk)
+- GitHub Release: [YMPlayer 0.4.1](https://github.com/reziarlleh/YMPlayer/releases/tag/v0.4.1)
+- APK в репозитории: [releases/0.4.1/YMPlayer-v0.4.1-debug-b41.apk](releases/0.4.1/YMPlayer-v0.4.1-debug-b41.apk)
+- Прямая ссылка на APK из релиза: [YMPlayer-v0.4.1-debug-b41.apk](https://github.com/reziarlleh/YMPlayer/releases/download/v0.4.1/YMPlayer-v0.4.1-debug-b41.apk)
 
 Путь `app/build/outputs/apk/debug/...` появляется только после локальной сборки
 через Gradle и не является файлом в GitHub-репозитории.
@@ -30,8 +30,8 @@ YMPlayer - неофициальный плеер Яндекс Музыки дл�
 - Главный экран плеера с обложкой, названием трека, альбомом, исполнителем,
   кнопками лайка/дизлайка и крупными кнопками управления.
 - "Моя волна" через rotor API Яндекс Музыки: сессия радио, feedback-события,
-  быстрый старт с первой полученной пачки, фоновая дозагрузка очереди и
-  предзагрузка следующего аудио после старта трека.
+  быстрый старт с первого трека и дозагрузка только следующего трека вместо
+  больших пачек.
 - Оффлайн-режим из постоянного кэша понравившихся треков Яндекс Музыки.
 - Постоянное хранение только глобального раздела "Мне нравится"; нелайкнутые
   треки используют только ограниченный временный кэш воспроизведения.
@@ -114,8 +114,10 @@ YMPlayer - неофициальный плеер Яндекс Музыки дл�
 ## Встроенный SideBar
 
 Встроенный SideBar включается в настройках приложения. Для работы оверлея Android
-попросит разрешение "поверх других окон". Панель использует TS18-подход из
-отдельного проекта SideBar: power, громкость, mute, home, back и скрытие панели.
+попросит разрешение "поверх других окон". Панель переносит TS18-подход из
+отдельного проекта SideBar: раскрытие вытягиванием от края, power, громкость,
+mute, home, back и скрытие панели. Размер кнопок в YMPlayer оставлен крупнее
+исходного варианта.
 
 На TS18-магнитолах YMPlayer отправляет `com.nwd.action.ACTION_KEY_VALUE` только
 с `extra_key_value` либо `com.nwd.can.action.ACTION_PLATFORM_SEND_CAN_VOLUME`,
@@ -135,7 +137,7 @@ $env:Path = "$env:JAVA_HOME\bin;$env:Path"
 После локальной сборки APK будет лежать в:
 
 ```text
-app/build/outputs/apk/debug/YMPlayer-v0.3.6-debug-b36.apk
+app/build/outputs/apk/debug/YMPlayer-v0.4.1-debug-b41.apk
 ```
 
 Этот путь относится только к локальной машине разработчика. На GitHub готовые

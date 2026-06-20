@@ -3,6 +3,24 @@
 This file tracks only working, testable versions. Broken or experimental
 intermediate builds should not be added here.
 
+## 0.4.1 - 2026-06-20
+
+Player state, SideBar parity, artwork, and lighter My Wave prefetch.
+
+- Restored the embedded SideBar button behavior and edge-swipe model from the
+  standalone SideBar project while keeping YMPlayer's larger panel buttons.
+- Added an embedded SideBar auto-hide checkbox in settings.
+- Fixed the audio-quality settings buttons being invisible because they were
+  laid out with row-only zero-width parameters in the vertical settings list.
+- Persisted the current playback source, queue, selected track, play mode,
+  shuffle state, like state, and approximate position so the UI can restore the
+  last player state after app restart or orientation changes.
+- Reset MediaSession and notification artwork per current track before loading
+  a new bitmap, preventing stale covers in launchers such as CarWebGuru during
+  shuffle playback.
+- Reduced My Wave expansion to one next track at a time: YMPlayer starts from
+  the first track and only asks the rotor API for the next item when needed.
+
 ## 0.4.0 - 2026-06-15
 
 Visible audio quality settings and milestone bump.

@@ -87,6 +87,17 @@
 - Moved audio quality controls to a dedicated top-level settings section.
 - Made online and permanent cache quality selection visually prominent.
 
+## Completed In 0.4.1
+
+- Restored embedded SideBar edge-swipe and button behavior from the standalone
+  SideBar implementation, keeping YMPlayer's larger panel buttons.
+- Added a settings checkbox for SideBar auto-hide.
+- Fixed invisible audio quality buttons in settings.
+- Added persisted player state for the current source, queue, selected track,
+  play mode, and playback position.
+- Fixed stale MediaSession artwork after shuffle track changes.
+- Reduced My Wave queue expansion to one next track instead of larger batches.
+
 ## Planned 0.4.x Features
 
 - Improve local playlist management with optional folder diff details and

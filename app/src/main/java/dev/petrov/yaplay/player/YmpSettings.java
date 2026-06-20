@@ -10,6 +10,7 @@ public final class YmpSettings {
     private static final String KEY_EQUALIZER_PACKAGE = "equalizer_package";
     private static final String KEY_STREAM_QUALITY = "stream_quality";
     private static final String KEY_CACHE_QUALITY = "cache_quality";
+    private static final String KEY_SIDEBAR_AUTO_HIDE = "sidebar_auto_hide";
 
     public static final String QUALITY_AUTO = "auto";
     public static final String QUALITY_ECONOMY = "economy";
@@ -34,6 +35,14 @@ public final class YmpSettings {
 
     public static void setEmbeddedSideBarEnabled(Context context, boolean enabled) {
         setSidebarWatchdogEnabled(context, enabled);
+    }
+
+    public static boolean isEmbeddedSideBarAutoHideEnabled(Context context) {
+        return prefs(context).getBoolean(KEY_SIDEBAR_AUTO_HIDE, true);
+    }
+
+    public static void setEmbeddedSideBarAutoHideEnabled(Context context, boolean enabled) {
+        prefs(context).edit().putBoolean(KEY_SIDEBAR_AUTO_HIDE, enabled).apply();
     }
 
     public static boolean isAutoCacheLikedEnabled(Context context) {

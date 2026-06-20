@@ -112,6 +112,7 @@ public class MainActivity extends Activity {
     private CheckBox chargingOnlyBox;
     private CheckBox showTokenBox;
     private CheckBox sidebarWatchdogBox;
+    private CheckBox sidebarAutoHideBox;
     private CheckBox autoCacheLikedBox;
     private Button streamQualityButton;
     private Button cacheQualityButton;
@@ -2057,11 +2058,11 @@ public class MainActivity extends Activity {
 
         streamQualityButton = pillButton(streamQualityText(), COLOR_ACCENT, COLOR_BG);
         streamQualityButton.setOnClickListener(v -> cycleStreamQuality());
-        root.addView(streamQualityButton, rowButtonParams());
+        root.addView(streamQualityButton, spaced());
 
         cacheQualityButton = pillButton(cacheQualityText(), COLOR_ACCENT_2, COLOR_BG);
         cacheQualityButton.setOnClickListener(v -> cycleCacheQuality());
-        root.addView(cacheQualityButton, rowButtonParams());
+        root.addView(cacheQualityButton, spaced());
     }
 
     private void addAccountSettings(LinearLayout root) {
@@ -2165,6 +2166,16 @@ public class MainActivity extends Activity {
             updateStatus(statusWithCache(isChecked ? "Embedded SideBar enabled" : "Embedded SideBar disabled"));
         });
         root.addView(sidebarWatchdogBox, spaced());
+
+        sidebarAutoHideBox = checkbox(R.string.sidebar_auto_hide);
+        sidebarAutoHideBox.setChecked(YmpSettings.isEmbeddedSideBarAutoHideEnabled(this));
+        sidebarAutoHideBox.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            YmpSettings.setEmbeddedSideBarAutoHideEnabled(this, isChecked);
+            Diagnostics.log(this, "YMP embedded SideBar auto-hide saved: enabled=" + isChecked);
+            ensureEmbeddedSideBar(false);
+            updateStatus(statusWithCache(isChecked ? "SideBar auto-hide enabled" : "SideBar auto-hide disabled"));
+        });
+        root.addView(sidebarAutoHideBox, spaced());
         addButton(root, R.string.show_hide_sidebar, v -> toggleEmbeddedSideBar());
         addButton(root, R.string.open_battery_settings, v -> openBatterySettings());
         addButton(root, R.string.open_autostart_settings, v -> openAutostartSettings());
@@ -2383,6 +2394,9 @@ public class MainActivity extends Activity {
 
     private void restoreLastPlayerStatus() {
         Intent snapshot = YmpPlaybackService.latestStatusSnapshot(this);
+        if (snapshot == null) {
+            snapshot = YmpPlaybackService.persistedStatusSnapshot(this);
+        }
         if (snapshot != null) {
             updatePlayerStatus(snapshot);
         }
@@ -2415,7 +2429,7 @@ public class MainActivity extends Activity {
         currentPrepared = prepared;
         currentLiked = liked;
         currentPlayMode = playMode;
-        if (playing || prepared) {
+        if (playing || prepared || queue > 0 || (title != null && !title.isEmpty())) {
             selectedSourceType = sourceType;
             selectedWaveMode = sourceType == YmpPlaybackService.SOURCE_WAVE;
             if (sourceType == YmpPlaybackService.SOURCE_PLAYLIST) {

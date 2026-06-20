@@ -133,6 +133,7 @@
     <string name="keep_sidebar_alive">Держать SideBar живым, пока работает YMPlayer</string>
     <string name="restart_sidebar">Перезапустить SideBar сейчас</string>
     <string name="enable_embedded_sidebar">Включить встроенный сайдбар поверх экрана</string>
+    <string name="sidebar_auto_hide">Автоматически скрывать сайдбар при бездействии</string>
     <string name="show_hide_sidebar">Показать/скрыть сайдбар</string>
     <string name="open_battery_settings">Открыть настройки энергосбережения</string>
     <string name="open_autostart_settings">Открыть настройки автозапуска</string>
@@ -148,7 +149,6 @@
     <string name="sidebar_quick_toggle">Показать или скрыть сайдбар</string>
     <string name="sidebar_disabled_status">Сайдбар выключен в настройках</string>
     <string name="sidebar_overlay_permission_required">Разрешите YMPlayer показ поверх других приложений, затем включите сайдбар снова</string>
-    <string name="sidebar_power_menu_failed">Прошивка заблокировала меню питания</string>
     <string name="auto_cache_liked_tracks">Автоматически скачивать понравившиеся треки в локальный кэш</string>
     <string name="stream_quality_template">Качество онлайн: %1$s</string>
     <string name="cache_quality_template">Качество кэша: %1$s</string>

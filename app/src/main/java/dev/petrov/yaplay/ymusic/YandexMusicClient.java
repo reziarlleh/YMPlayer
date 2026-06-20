@@ -343,7 +343,7 @@ public final class YandexMusicClient {
     public WaveTracks getMyWaveFastStart(int fallbackTargetTracks) throws IOException, JSONException {
         int target = Math.max(1, fallbackTargetTracks);
         try {
-            WaveTracks session = getMyWaveSessionFirstBatch();
+            WaveTracks session = getMyWaveSessionFirstBatch(target);
             if (!session.tracks.isEmpty()) {
                 return session;
             }
@@ -376,6 +376,9 @@ public final class YandexMusicClient {
                 break;
             }
             for (String id : ids) {
+                if (trackIds.size() >= target) {
+                    break;
+                }
                 if (!trackIds.contains(id)) {
                     trackIds.add(id);
                     if (!batchId.isEmpty()) {
@@ -395,7 +398,7 @@ public final class YandexMusicClient {
         return new WaveTracks(tracks, batchIdByTrackKey, batchId, sessionId);
     }
 
-    private WaveTracks getMyWaveSessionFirstBatch() throws IOException, JSONException {
+    private WaveTracks getMyWaveSessionFirstBatch(int targetTracks) throws IOException, JSONException {
         JSONObject body = new JSONObject();
         JSONArray seeds = new JSONArray();
         seeds.put(MY_WAVE_STATION);
@@ -409,7 +412,8 @@ public final class YandexMusicClient {
         String sessionId = result.optString("radioSessionId");
         String batchId = firstNonEmpty(result.optString("batchId"), result.optString("batch_id"));
         JSONArray sequence = result.optJSONArray("sequence");
-        List<String> trackIds = trackIdsFromSequence(sequence);
+        int target = Math.max(1, targetTracks);
+        List<String> trackIds = limitStrings(trackIdsFromSequence(sequence), target);
         Map<String, String> batchIdByTrackKey = new HashMap<>();
         for (String id : trackIds) {
             if (!batchId.isEmpty()) {
@@ -417,7 +421,7 @@ public final class YandexMusicClient {
             }
         }
 
-        List<Track> tracks = tracksFromSequence(sequence);
+        List<Track> tracks = limitTracks(tracksFromSequence(sequence), target);
         if (tracks.isEmpty()) {
             tracks = getTracks(trackIds);
         }
@@ -533,6 +537,9 @@ public final class YandexMusicClient {
                     if (!batchId.isEmpty()) {
                         batchIdByTrackKey.put(key, batchId);
                         batchIdByTrackKey.put(lastTrackId, batchId);
+                    }
+                    if (trackIds.size() >= targetTracks) {
+                        break;
                     }
                 }
             }
@@ -1098,6 +1105,20 @@ public final class YandexMusicClient {
             }
         }
         return tracks;
+    }
+
+    private static List<String> limitStrings(List<String> values, int limit) {
+        if (values == null || values.size() <= limit) {
+            return values == null ? new ArrayList<>() : values;
+        }
+        return new ArrayList<>(values.subList(0, Math.max(0, limit)));
+    }
+
+    private static List<Track> limitTracks(List<Track> values, int limit) {
+        if (values == null || values.size() <= limit) {
+            return values == null ? new ArrayList<>() : values;
+        }
+        return new ArrayList<>(values.subList(0, Math.max(0, limit)));
     }
 
     private static String joinTitles(JSONArray array) {

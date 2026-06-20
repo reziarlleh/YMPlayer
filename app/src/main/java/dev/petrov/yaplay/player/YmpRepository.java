@@ -20,7 +20,7 @@ import dev.petrov.yaplay.ymusic.TokenStore;
 import dev.petrov.yaplay.ymusic.YandexMusicClient;
 
 public final class YmpRepository {
-    private static final int MORE_WAVE_TARGET = 30;
+    private static final int MORE_WAVE_TARGET = 1;
 
     private final Context context;
     private final YandexTrackCache audioCache;

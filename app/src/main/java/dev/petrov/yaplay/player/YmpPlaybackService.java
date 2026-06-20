@@ -7,6 +7,7 @@ import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
@@ -34,6 +35,9 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Random;
 import java.util.Set;
+
+import org.json.JSONArray;
+import org.json.JSONObject;
 
 import dev.petrov.yaplay.Diagnostics;
 import dev.petrov.yaplay.MainActivity;
@@ -90,7 +94,11 @@ public class YmpPlaybackService extends MediaBrowserService {
     public static final String EXTRA_ARTIST_ID = "artist_id";
     public static final String EXTRA_SOURCE_LABEL = "source_label";
     public static final String EXTRA_AUDIO_SESSION_ID = "audio_session_id";
+    public static final String EXTRA_POSITION = "position";
 
+    private static final String STATE_PREFS = "ymplayer_playback_state";
+    private static final String KEY_HAS_STATE = "has_state";
+    private static final String KEY_QUEUE_JSON = "queue_json";
     private static final String CHANNEL_ID = "playback";
     private static final int NOTIFICATION_ID = 2001;
     private static final String ROOT_ID = "ymp_root";
@@ -141,6 +149,7 @@ public class YmpPlaybackService extends MediaBrowserService {
     private String metadataCoverUrl = "";
     private Bitmap metadataCoverBitmap;
     private boolean metadataCoverLoading;
+    private long pendingSeekMs;
 
     public static Intent latestStatusSnapshot(Context context) {
         Intent status = latestStatus;
@@ -152,6 +161,37 @@ public class YmpPlaybackService extends MediaBrowserService {
         return copy;
     }
 
+    public static Intent persistedStatusSnapshot(Context context) {
+        SharedPreferences prefs = context.getApplicationContext()
+                .getSharedPreferences(STATE_PREFS, Context.MODE_PRIVATE);
+        if (!prefs.getBoolean(KEY_HAS_STATE, false)) {
+            return null;
+        }
+        Intent intent = new Intent(ACTION_STATUS);
+        intent.setPackage(context.getPackageName());
+        intent.putExtra(EXTRA_TITLE, prefs.getString(EXTRA_TITLE, ""));
+        intent.putExtra(EXTRA_ARTIST, prefs.getString(EXTRA_ARTIST, ""));
+        intent.putExtra(EXTRA_ALBUM, prefs.getString(EXTRA_ALBUM, ""));
+        intent.putExtra(EXTRA_COVER_URL, prefs.getString(EXTRA_COVER_URL, ""));
+        intent.putExtra(EXTRA_STATUS, prefs.getString(EXTRA_STATUS, ""));
+        intent.putExtra(EXTRA_QUEUE, prefs.getInt(EXTRA_QUEUE, 0));
+        intent.putExtra(EXTRA_INDEX, prefs.getInt(EXTRA_INDEX, -1));
+        intent.putExtra(EXTRA_WAVE, prefs.getBoolean(EXTRA_WAVE, true));
+        intent.putExtra(EXTRA_SHUFFLE, prefs.getBoolean(EXTRA_SHUFFLE, false));
+        intent.putExtra(EXTRA_PLAYING, prefs.getBoolean(EXTRA_PLAYING, false));
+        intent.putExtra(EXTRA_PREPARED, prefs.getBoolean(EXTRA_PREPARED, false));
+        intent.putExtra(EXTRA_PLAY_MODE, prefs.getInt(EXTRA_PLAY_MODE, PLAY_MODE_ORDER));
+        intent.putExtra(EXTRA_LIKED, prefs.getBoolean(EXTRA_LIKED, false));
+        intent.putExtra(EXTRA_SOURCE_TYPE, prefs.getInt(EXTRA_SOURCE_TYPE, SOURCE_WAVE));
+        intent.putExtra(EXTRA_SOURCE_TITLE, prefs.getString(EXTRA_SOURCE_TITLE, ""));
+        intent.putExtra(EXTRA_PLAYLIST_KIND, prefs.getInt(EXTRA_PLAYLIST_KIND, -1));
+        intent.putExtra(EXTRA_LOCAL_PLAYLIST_ID, prefs.getString(EXTRA_LOCAL_PLAYLIST_ID, ""));
+        intent.putExtra(EXTRA_LOCAL_PLAYLIST_TITLE, prefs.getString(EXTRA_LOCAL_PLAYLIST_TITLE, ""));
+        intent.putExtra(EXTRA_TRACK_KEY, prefs.getString(EXTRA_TRACK_KEY, ""));
+        intent.putExtra(EXTRA_POSITION, prefs.getLong(EXTRA_POSITION, 0L));
+        return intent;
+    }
+
     @Override
     public void onCreate() {
         super.onCreate();
@@ -160,6 +200,14 @@ public class YmpPlaybackService extends MediaBrowserService {
         mediaPlayer.setOnPreparedListener(mp -> {
             prepared = true;
             loading = false;
+            if (pendingSeekMs > 0L) {
+                try {
+                    mp.seekTo((int) Math.min(pendingSeekMs, Integer.MAX_VALUE));
+                } catch (Exception ex) {
+                    Diagnostics.log(this, "YMP restore seek ignored", ex);
+                }
+                pendingSeekMs = 0L;
+            }
             mp.start();
             statusText = "Playing";
             updateSession();
@@ -194,6 +242,7 @@ public class YmpPlaybackService extends MediaBrowserService {
         mediaSession.setCallback(new SessionCallback());
         mediaSession.setActive(true);
         setSessionToken(mediaSession.getSessionToken());
+        restorePlaybackState();
         updateSession();
         createChannel();
         startSidebarWatchdog();
@@ -278,6 +327,44 @@ public class YmpPlaybackService extends MediaBrowserService {
         }
         stopSidebarWatchdog();
         super.onDestroy();
+    }
+
+    private void restorePlaybackState() {
+        SharedPreferences prefs = getSharedPreferences(STATE_PREFS, MODE_PRIVATE);
+        if (!prefs.getBoolean(KEY_HAS_STATE, false)) {
+            return;
+        }
+        List<YandexMusicClient.Track> restoredQueue = tracksFromJson(prefs.getString(KEY_QUEUE_JSON, ""));
+        if (restoredQueue.isEmpty()) {
+            return;
+        }
+        queue.clear();
+        queue.addAll(restoredQueue);
+        queueIndex = clamp(prefs.getInt(EXTRA_INDEX, 0), 0, queue.size() - 1);
+        currentSourceType = prefs.getInt(EXTRA_SOURCE_TYPE, SOURCE_WAVE);
+        currentPlaylistKind = prefs.getInt(EXTRA_PLAYLIST_KIND, -1);
+        currentLocalPlaylistId = prefs.getString(EXTRA_LOCAL_PLAYLIST_ID, "");
+        currentSourceTitle = prefs.getString(EXTRA_SOURCE_TITLE, sourceTitleFor(currentSourceType));
+        if (currentSourceTitle == null || currentSourceTitle.trim().isEmpty()) {
+            currentSourceTitle = sourceTitleFor(currentSourceType);
+        }
+        waveMode = currentSourceType == SOURCE_WAVE;
+        playMode = waveMode ? PLAY_MODE_ORDER : prefs.getInt(EXTRA_PLAY_MODE, PLAY_MODE_ORDER);
+        shuffle = !waveMode && playMode == PLAY_MODE_SHUFFLE;
+        pendingSeekMs = Math.max(0L, prefs.getLong(EXTRA_POSITION, 0L));
+        prepared = false;
+        loading = false;
+        statusText = prefs.getString(EXTRA_STATUS, "Ready to resume");
+        if (statusText == null || statusText.trim().isEmpty()) {
+            statusText = "Ready to resume";
+        }
+        if (waveMode) {
+            waveQueue = new YmpRepository.WaveQueue(queue, "", "", null);
+        }
+        Diagnostics.log(this, "YMP restored playback state: source=" + currentSourceType
+                + ", index=" + queueIndex
+                + ", queue=" + queue.size()
+                + ", position=" + pendingSeekMs);
     }
 
     @Override
@@ -654,7 +741,8 @@ public class YmpPlaybackService extends MediaBrowserService {
             broadcastStatus();
             return;
         }
-        if (waveMode && queueIndex >= queue.size() - 3) {
+        int next = queueIndex + 1;
+        if (waveMode && next >= queue.size()) {
             fetchMoreWaveThenNext(fromCompletion);
             return;
         }
@@ -662,7 +750,6 @@ public class YmpPlaybackService extends MediaBrowserService {
             playAt(random.nextInt(queue.size()));
             return;
         }
-        int next = queueIndex + 1;
         if (next >= queue.size()) {
             if (!waveMode && playMode == PLAY_MODE_REPEAT) {
                 playAt(0);
@@ -715,7 +802,7 @@ public class YmpPlaybackService extends MediaBrowserService {
 
     private void prefetchWave(boolean force) {
         if (!waveMode || loading || waveQueue == null || wavePrefetching
-                || (!force && queueIndex < queue.size() - 8)) {
+                || (!force && queueIndex + 1 < queue.size())) {
             return;
         }
         wavePrefetching = true;
@@ -1073,6 +1160,7 @@ public class YmpPlaybackService extends MediaBrowserService {
         YandexMusicClient.Track track = currentTrack();
         if (track != null) {
             String artworkKey = artworkKeyFor(track);
+            ensureMetadataCover(track);
             MediaMetadata.Builder metadata = new MediaMetadata.Builder()
                     .putString(MediaMetadata.METADATA_KEY_TITLE, track.title)
                     .putString(MediaMetadata.METADATA_KEY_ARTIST, track.artist)
@@ -1086,7 +1174,6 @@ public class YmpPlaybackService extends MediaBrowserService {
                 metadata.putBitmap(MediaMetadata.METADATA_KEY_ART, cover);
             }
             mediaSession.setMetadata(metadata.build());
-            ensureMetadataCover(track);
         }
         mediaSession.setActive(true);
     }
@@ -1220,8 +1307,10 @@ public class YmpPlaybackService extends MediaBrowserService {
                 .setCategory(Notification.CATEGORY_TRANSPORT)
                 .setContentTitle(notificationTitle())
                 .setContentText(notificationText());
-        if (metadataCoverBitmap != null) {
-            builder.setLargeIcon(metadataCoverBitmap);
+        YandexMusicClient.Track track = currentTrack();
+        Bitmap cover = track == null ? null : metadataCoverFor(artworkKeyFor(track));
+        if (cover != null) {
+            builder.setLargeIcon(cover);
         }
 
         builder.addAction(R.drawable.ic_stat_yaplay, "Prev", serviceIntent(ACTION_PREVIOUS, 10));
@@ -1279,9 +1368,47 @@ public class YmpPlaybackService extends MediaBrowserService {
         intent.putExtra(EXTRA_SOURCE_TITLE, currentSourceTitle);
         intent.putExtra(EXTRA_PLAYLIST_KIND, currentPlaylistKind);
         intent.putExtra(EXTRA_LOCAL_PLAYLIST_ID, currentLocalPlaylistId);
+        intent.putExtra(EXTRA_LOCAL_PLAYLIST_TITLE, currentSourceType == SOURCE_LOCAL_PLAYLIST ? currentSourceTitle : "");
+        intent.putExtra(EXTRA_TRACK_KEY, track == null ? "" : track.key);
+        long position = (mediaPlayer != null && (prepared || mediaPlayer.isPlaying()))
+                ? mediaPlayerPosition()
+                : pendingSeekMs;
+        intent.putExtra(EXTRA_POSITION, position);
         intent.putExtra(EXTRA_AUDIO_SESSION_ID, mediaPlayer == null ? 0 : mediaPlayer.getAudioSessionId());
         latestStatus = new Intent(intent);
+        persistPlaybackState(intent);
         sendBroadcast(intent);
+    }
+
+    private void persistPlaybackState(Intent intent) {
+        try {
+            SharedPreferences.Editor editor = getSharedPreferences(STATE_PREFS, MODE_PRIVATE).edit()
+                    .putBoolean(KEY_HAS_STATE, true)
+                    .putString(KEY_QUEUE_JSON, queueToJson().toString())
+                    .putString(EXTRA_TITLE, intent.getStringExtra(EXTRA_TITLE))
+                    .putString(EXTRA_ARTIST, intent.getStringExtra(EXTRA_ARTIST))
+                    .putString(EXTRA_ALBUM, intent.getStringExtra(EXTRA_ALBUM))
+                    .putString(EXTRA_COVER_URL, intent.getStringExtra(EXTRA_COVER_URL))
+                    .putString(EXTRA_STATUS, intent.getStringExtra(EXTRA_STATUS))
+                    .putInt(EXTRA_QUEUE, intent.getIntExtra(EXTRA_QUEUE, 0))
+                    .putInt(EXTRA_INDEX, intent.getIntExtra(EXTRA_INDEX, -1))
+                    .putBoolean(EXTRA_WAVE, intent.getBooleanExtra(EXTRA_WAVE, false))
+                    .putBoolean(EXTRA_SHUFFLE, intent.getBooleanExtra(EXTRA_SHUFFLE, false))
+                    .putBoolean(EXTRA_PLAYING, intent.getBooleanExtra(EXTRA_PLAYING, false))
+                    .putBoolean(EXTRA_PREPARED, intent.getBooleanExtra(EXTRA_PREPARED, false))
+                    .putInt(EXTRA_PLAY_MODE, intent.getIntExtra(EXTRA_PLAY_MODE, PLAY_MODE_ORDER))
+                    .putBoolean(EXTRA_LIKED, intent.getBooleanExtra(EXTRA_LIKED, false))
+                    .putInt(EXTRA_SOURCE_TYPE, intent.getIntExtra(EXTRA_SOURCE_TYPE, SOURCE_WAVE))
+                    .putString(EXTRA_SOURCE_TITLE, intent.getStringExtra(EXTRA_SOURCE_TITLE))
+                    .putInt(EXTRA_PLAYLIST_KIND, intent.getIntExtra(EXTRA_PLAYLIST_KIND, -1))
+                    .putString(EXTRA_LOCAL_PLAYLIST_ID, intent.getStringExtra(EXTRA_LOCAL_PLAYLIST_ID))
+                    .putString(EXTRA_LOCAL_PLAYLIST_TITLE, intent.getStringExtra(EXTRA_LOCAL_PLAYLIST_TITLE))
+                    .putString(EXTRA_TRACK_KEY, intent.getStringExtra(EXTRA_TRACK_KEY))
+                    .putLong(EXTRA_POSITION, intent.getLongExtra(EXTRA_POSITION, 0L));
+            editor.apply();
+        } catch (Exception ex) {
+            Diagnostics.log(this, "YMP persist playback state failed", ex);
+        }
     }
 
     private static String sourceTitleFor(int sourceType) {
@@ -1368,6 +1495,68 @@ public class YmpPlaybackService extends MediaBrowserService {
             }
         }
         return false;
+    }
+
+    private JSONArray queueToJson() {
+        JSONArray array = new JSONArray();
+        for (YandexMusicClient.Track track : queue) {
+            try {
+                JSONObject item = new JSONObject();
+                item.put("id", track.id);
+                item.put("albumId", track.albumId);
+                item.put("key", track.key);
+                item.put("title", track.title);
+                item.put("artist", track.artist);
+                item.put("album", track.album);
+                item.put("year", track.year);
+                item.put("durationMs", track.durationMs);
+                item.put("coverUrl", track.coverUrl);
+                item.put("order", track.order);
+                array.put(item);
+            } catch (Exception ex) {
+                Diagnostics.log(this, "YMP queue state track skipped", ex);
+            }
+        }
+        return array;
+    }
+
+    private List<YandexMusicClient.Track> tracksFromJson(String json) {
+        List<YandexMusicClient.Track> tracks = new ArrayList<>();
+        if (json == null || json.trim().isEmpty()) {
+            return tracks;
+        }
+        try {
+            JSONArray array = new JSONArray(json);
+            for (int i = 0; i < array.length(); i++) {
+                JSONObject item = array.optJSONObject(i);
+                if (item == null) {
+                    continue;
+                }
+                String key = item.optString("key", "");
+                if (key.isEmpty()) {
+                    continue;
+                }
+                tracks.add(new YandexMusicClient.Track(
+                        item.optString("id", ""),
+                        item.optString("albumId", ""),
+                        key,
+                        item.optString("title", key),
+                        item.optString("artist", ""),
+                        item.optString("album", ""),
+                        item.optInt("year", 0),
+                        item.optLong("durationMs", 0L),
+                        item.optString("coverUrl", ""),
+                        item.optInt("order", i + 1)
+                ));
+            }
+        } catch (Exception ex) {
+            Diagnostics.log(this, "YMP restore queue state failed", ex);
+        }
+        return tracks;
+    }
+
+    private static int clamp(int value, int min, int max) {
+        return Math.max(min, Math.min(max, value));
     }
 
     private void closePfd() {
