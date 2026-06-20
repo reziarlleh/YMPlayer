@@ -118,9 +118,15 @@
 
 ## Planned 0.4.x Features
 
+- Keep 0.4.x focused on stabilization while the user tests 0.4.3 on a real
+  device.
+- Current audit and prioritized fix list: [PROJECT_AUDIT.md](PROJECT_AUDIT.md).
+- Highest-priority cleanup is removing the remaining active Poweramp-era cache
+  path without changing the existing liked-track cache directories.
 - Improve local playlist management with optional folder diff details and
   better large-playlist editing ergonomics.
-- Add a favorite-artist action when a stable Yandex Music endpoint is confirmed.
+- Add a favorite-artist action only when a stable Yandex Music endpoint is
+  confirmed.
 
 ## Research Items
 

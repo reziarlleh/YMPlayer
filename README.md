@@ -157,6 +157,7 @@ APK хранятся в `releases/<version>/` и прикрепляются к G
 
 - Изменения рабочих версий: [CHANGELOG.md](CHANGELOG.md)
 - План развития: [ROADMAP.md](ROADMAP.md)
+- Текущий технический аудит и список "исправить": [PROJECT_AUDIT.md](PROJECT_AUDIT.md)
 - Архив APK: [releases/](releases/)
 
 В историю версий добавляются только сборки, которые можно ставить и тестировать
