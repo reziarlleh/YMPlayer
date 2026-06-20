@@ -3,6 +3,20 @@
 This file tracks only working, testable versions. Broken or experimental
 intermediate builds should not be added here.
 
+## 0.4.3 - 2026-06-20
+
+Artwork fallback fix for CarWebGuru and YMPlayer.
+
+- Fixed sticky artwork in CarWebGuru when the next track has no cover URL, no
+  embedded local artwork, or a failed cover download.
+- MediaSession metadata and playback notifications now always publish an artwork
+  bitmap: the real cover when available, otherwise the YMPlayer launcher icon.
+- The main player screen now resets to the YMPlayer icon immediately when a new
+  cover URL starts loading, so it no longer shows the previous track cover while
+  waiting for a failed or slow cover request.
+- Source selection without a current track now also publishes default YMPlayer
+  artwork instead of leaving old MediaSession metadata intact.
+
 ## 0.4.2 - 2026-06-20
 
 Power menu, playback-position restore, and passive source switching.

@@ -109,6 +109,13 @@
 - Added remembered last track, index, position, and queue mode per offline
   cache, Yandex playlist, and local playlist.
 
+## Completed In 0.4.3
+
+- Fixed sticky cover art in CarWebGuru by always publishing either real artwork
+  or the YMPlayer default icon in MediaSession and notifications.
+- Reset the main player cover to the default icon immediately while a newly
+  selected track cover is loading.
+
 ## Planned 0.4.x Features
 
 - Improve local playlist management with optional folder diff details and

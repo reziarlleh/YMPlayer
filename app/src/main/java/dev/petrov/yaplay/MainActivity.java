@@ -2621,8 +2621,8 @@ public class MainActivity extends Activity {
             return;
         }
         latestCoverUrl = url;
+        coverView.setImageResource(R.mipmap.ic_launcher);
         if (url.isEmpty()) {
-            coverView.setImageResource(R.mipmap.ic_launcher);
             return;
         }
         Context appContext = getApplicationContext();

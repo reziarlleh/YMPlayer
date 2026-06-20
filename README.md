@@ -13,11 +13,11 @@ YMPlayer - неофициальный плеер Яндекс Музыки дл�
 
 ## Скачать
 
-Текущая рабочая сборка: **0.4.2**, `versionCode 42`.
+Текущая рабочая сборка: **0.4.3**, `versionCode 43`.
 
-- GitHub Release: [YMPlayer 0.4.2](https://github.com/reziarlleh/YMPlayer/releases/tag/v0.4.2)
-- APK в репозитории: [releases/0.4.2/YMPlayer-v0.4.2-debug-b42.apk](releases/0.4.2/YMPlayer-v0.4.2-debug-b42.apk)
-- Прямая ссылка на APK из релиза: [YMPlayer-v0.4.2-debug-b42.apk](https://github.com/reziarlleh/YMPlayer/releases/download/v0.4.2/YMPlayer-v0.4.2-debug-b42.apk)
+- GitHub Release: [YMPlayer 0.4.3](https://github.com/reziarlleh/YMPlayer/releases/tag/v0.4.3)
+- APK в репозитории: [releases/0.4.3/YMPlayer-v0.4.3-debug-b43.apk](releases/0.4.3/YMPlayer-v0.4.3-debug-b43.apk)
+- Прямая ссылка на APK из релиза: [YMPlayer-v0.4.3-debug-b43.apk](https://github.com/reziarlleh/YMPlayer/releases/download/v0.4.3/YMPlayer-v0.4.3-debug-b43.apk)
 
 Путь `app/build/outputs/apk/debug/...` появляется только после локальной сборки
 через Gradle и не является файлом в GitHub-репозитории.
@@ -60,6 +60,9 @@ YMPlayer - неофициальный плеер Яндекс Музыки дл�
   обложки и провайдер хранилища разрешает запись.
 - Передача bitmap-обложек в MediaSession и уведомление, чтобы CarWebGuru и
   похожие лаунчеры могли показывать обложку.
+- Если у трека нет доступной обложки или загрузка сорвалась, MediaSession,
+  уведомление и главный экран получают стандартную обложку YMPlayer, а не
+  оставляют картинку предыдущего трека.
 - Кнопка EQ/DSP с выбором найденного приложения эквалайзера.
 - Встроенный SideBar-оверлей для TS18: включается в настройках, показывается и
   скрывается с главного экрана.
@@ -144,7 +147,7 @@ $env:Path = "$env:JAVA_HOME\bin;$env:Path"
 После локальной сборки APK будет лежать в:
 
 ```text
-app/build/outputs/apk/debug/YMPlayer-v0.4.2-debug-b42.apk
+app/build/outputs/apk/debug/YMPlayer-v0.4.3-debug-b43.apk
 ```
 
 Этот путь относится только к локальной машине разработчика. На GitHub готовые

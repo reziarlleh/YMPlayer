@@ -168,6 +168,7 @@ public class YmpPlaybackService extends MediaBrowserService {
     private String prefetchedTrackKey = "";
     private String metadataCoverUrl = "";
     private Bitmap metadataCoverBitmap;
+    private Bitmap defaultArtworkBitmap;
     private boolean metadataCoverLoading;
     private long pendingSeekMs;
 
@@ -1277,24 +1278,39 @@ public class YmpPlaybackService extends MediaBrowserService {
                 .build());
 
         YandexMusicClient.Track track = currentTrack();
-        if (track != null) {
-            String artworkKey = artworkKeyFor(track);
+        if (track == null) {
+            MediaMetadata.Builder metadata = new MediaMetadata.Builder()
+                    .putString(MediaMetadata.METADATA_KEY_TITLE, "YMPlayer")
+                    .putString(MediaMetadata.METADATA_KEY_ARTIST, "")
+                    .putString(MediaMetadata.METADATA_KEY_ALBUM, statusText == null ? "" : statusText)
+                    .putString(MediaMetadata.METADATA_KEY_ALBUM_ART_URI, defaultArtworkUri())
+                    .putString(MediaMetadata.METADATA_KEY_ART_URI, defaultArtworkUri());
+            putArtwork(metadata, defaultArtworkBitmap());
+            mediaSession.setMetadata(metadata.build());
+        } else {
             ensureMetadataCover(track);
+            String artworkUri = track.coverUrl == null || track.coverUrl.trim().isEmpty()
+                    ? defaultArtworkUri()
+                    : track.coverUrl;
             MediaMetadata.Builder metadata = new MediaMetadata.Builder()
                     .putString(MediaMetadata.METADATA_KEY_TITLE, track.title)
                     .putString(MediaMetadata.METADATA_KEY_ARTIST, track.artist)
                     .putString(MediaMetadata.METADATA_KEY_ALBUM, track.album)
-                    .putString(MediaMetadata.METADATA_KEY_ALBUM_ART_URI, track.coverUrl)
-                    .putString(MediaMetadata.METADATA_KEY_ART_URI, track.coverUrl)
+                    .putString(MediaMetadata.METADATA_KEY_ALBUM_ART_URI, artworkUri)
+                    .putString(MediaMetadata.METADATA_KEY_ART_URI, artworkUri)
                     .putLong(MediaMetadata.METADATA_KEY_DURATION, track.durationMs);
-            Bitmap cover = metadataCoverFor(artworkKey);
-            if (cover != null) {
-                metadata.putBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART, cover);
-                metadata.putBitmap(MediaMetadata.METADATA_KEY_ART, cover);
-            }
+            putArtwork(metadata, metadataCoverForTrack(track));
             mediaSession.setMetadata(metadata.build());
         }
         mediaSession.setActive(true);
+    }
+
+    private void putArtwork(MediaMetadata.Builder metadata, Bitmap cover) {
+        Bitmap safeCover = cover == null ? defaultArtworkBitmap() : cover;
+        if (safeCover != null) {
+            metadata.putBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART, safeCover);
+            metadata.putBitmap(MediaMetadata.METADATA_KEY_ART, safeCover);
+        }
     }
 
     private String artworkKeyFor(YandexMusicClient.Track track) {
@@ -1310,6 +1326,22 @@ public class YmpPlaybackService extends MediaBrowserService {
     private Bitmap metadataCoverFor(String coverUrl) {
         String url = coverUrl == null ? "" : coverUrl;
         return url.equals(metadataCoverUrl) ? metadataCoverBitmap : null;
+    }
+
+    private Bitmap metadataCoverForTrack(YandexMusicClient.Track track) {
+        Bitmap cover = track == null ? null : metadataCoverFor(artworkKeyFor(track));
+        return cover == null ? defaultArtworkBitmap() : cover;
+    }
+
+    private Bitmap defaultArtworkBitmap() {
+        if (defaultArtworkBitmap == null) {
+            defaultArtworkBitmap = BitmapFactory.decodeResource(getResources(), R.mipmap.ic_launcher);
+        }
+        return defaultArtworkBitmap;
+    }
+
+    private String defaultArtworkUri() {
+        return "android.resource://" + getPackageName() + "/" + R.mipmap.ic_launcher;
     }
 
     private void ensureMetadataCover(YandexMusicClient.Track track) {
@@ -1427,7 +1459,7 @@ public class YmpPlaybackService extends MediaBrowserService {
                 .setContentTitle(notificationTitle())
                 .setContentText(notificationText());
         YandexMusicClient.Track track = currentTrack();
-        Bitmap cover = track == null ? null : metadataCoverFor(artworkKeyFor(track));
+        Bitmap cover = metadataCoverForTrack(track);
         if (cover != null) {
             builder.setLargeIcon(cover);
         }
