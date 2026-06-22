@@ -67,7 +67,7 @@ import dev.petrov.yaplay.player.Ts18AudioControls;
 import dev.petrov.yaplay.player.EmbeddedSideBarService;
 import dev.petrov.yaplay.player.LocalArtworkEnricher;
 import dev.petrov.yaplay.player.LocalPlaylistStore;
-import dev.petrov.yaplay.player.YmpAccessibilityService;
+import dev.petrov.yaplay.player.YmpPowerMenuHelper;
 import dev.petrov.yaplay.player.YmpPlaybackService;
 import dev.petrov.yaplay.player.YmpRepository;
 import dev.petrov.yaplay.player.YmpSettings;
@@ -2179,10 +2179,14 @@ public class MainActivity extends Activity {
         });
         root.addView(sidebarAutoHideBox, spaced());
         addButton(root, R.string.show_hide_sidebar, v -> toggleEmbeddedSideBar());
-        addLibraryStatusRow(root, getString(YmpAccessibilityService.isEnabled(this)
-                ? R.string.accessibility_power_status_enabled
-                : R.string.accessibility_power_status_disabled));
-        addButton(root, R.string.open_accessibility_settings, v -> openAccessibilitySettings());
+        if (YmpPowerMenuHelper.isAvailable(this)) {
+            addLibraryStatusRow(root, getString(YmpPowerMenuHelper.isEnabled(this)
+                    ? R.string.accessibility_power_status_enabled
+                    : R.string.accessibility_power_status_disabled));
+            addButton(root, R.string.open_accessibility_settings, v -> openAccessibilitySettings());
+        } else {
+            addLibraryStatusRow(root, getString(R.string.accessibility_power_safe_build_disabled));
+        }
         addButton(root, R.string.open_battery_settings, v -> openBatterySettings());
         addButton(root, R.string.open_autostart_settings, v -> openAutostartSettings());
 

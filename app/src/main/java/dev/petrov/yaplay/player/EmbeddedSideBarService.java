@@ -1,6 +1,7 @@
 package dev.petrov.yaplay.player;
 
 import android.Manifest;
+import android.annotation.SuppressLint;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
@@ -28,6 +29,7 @@ import android.view.WindowManager;
 import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
+import android.widget.Toast;
 
 import java.util.EnumMap;
 import java.util.Map;
@@ -89,6 +91,7 @@ public class EmbeddedSideBarService extends Service {
     }
 
     @Override
+    @SuppressLint("ForegroundServiceType")
     public void onCreate() {
         super.onCreate();
         windowManager = (WindowManager) getSystemService(Context.WINDOW_SERVICE);
@@ -195,7 +198,9 @@ public class EmbeddedSideBarService extends Service {
 
         addPanelButton(panel, horizontal, R.drawable.ic_side_power, "Power", v -> {
             resetAutoHide();
-            YmpAccessibilityService.requestPowerDialog(this);
+            if (!YmpPowerMenuHelper.requestPowerDialog(this)) {
+                Toast.makeText(this, R.string.accessibility_power_safe_build_disabled, Toast.LENGTH_LONG).show();
+            }
         });
         addPanelButton(panel, horizontal, R.drawable.ic_side_volume_up, "Volume up", v -> {
             resetAutoHide();

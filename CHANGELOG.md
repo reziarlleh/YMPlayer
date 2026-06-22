@@ -3,6 +3,20 @@
 This file tracks only working, testable versions. Broken or experimental
 intermediate builds should not be added here.
 
+## 0.4.5 - 2026-06-22
+
+Install-safe build after Google Play Protect blocked the APK.
+
+- Removed `AccessibilityService` from YMPlayer. It triggered Google Play
+  Protect hard blocking on a Redmi Note 14 Pro and was unreliable on TS18 head
+  units because the firmware can disable accessibility services.
+- Kept the embedded SideBar overlay, edge pull-out behavior, volume, mute,
+  home, and back controls.
+- The embedded SideBar power button is temporarily disabled in this build and
+  shows an explanatory message instead of using an unreliable accessibility
+  shortcut.
+- Kept version and APK names informative: `YMPlayer-v0.4.5-debug-b45.apk`.
+
 ## 0.4.4 - 2026-06-20
 
 Legacy cleanup and local artwork polish.

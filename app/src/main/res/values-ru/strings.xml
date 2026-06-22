@@ -123,6 +123,7 @@
     <string name="accessibility_power_description">Позволяет встроенному сайдбару YMPlayer открывать системное меню выключения и перезагрузки.</string>
     <string name="accessibility_power_status_enabled">Служба меню питания: включена</string>
     <string name="accessibility_power_status_disabled">Служба меню питания: выключена. Включите YMPlayer в специальных возможностях.</string>
+    <string name="accessibility_power_safe_build_disabled">Служба меню питания не включена в безопасную сборку. Используйте полную TS18-сборку, если устройство разрешает sideload-приложения со специальными возможностями.</string>
     <string name="show_hide_sidebar">Показать/скрыть сайдбар</string>
     <string name="open_accessibility_settings">Открыть специальные возможности для меню питания</string>
     <string name="open_battery_settings">Открыть настройки энергосбережения</string>

@@ -127,14 +127,27 @@
 - Added a visible settings status for the YMPlayer Accessibility service used
   by the embedded SideBar power menu.
 
+## Completed In 0.4.5
+
+- Removed YMPlayer's AccessibilityService after Google Play Protect blocked the
+  APK and TS18 reliability concerns made the service unsuitable as a core
+  dependency.
+- Kept the embedded SideBar overlay and regular controls, but temporarily
+  disabled the SideBar power-menu action.
+- Returned to a single install-safe debug APK instead of requiring users to
+  choose between safe and full builds.
+
 ## Planned 0.4.x Features
 
-- Keep 0.4.x focused on stabilization while the user tests 0.4.4 on a real
+- Keep 0.4.x focused on stabilization while the user tests 0.4.5 on a real
   device.
 - Current audit and prioritized fix list: [PROJECT_AUDIT.md](PROJECT_AUDIT.md).
 - Next cleanup priority is reducing stale background UI updates with a shared
   executor and simple cancellation tokens for search/import/source-loading
   operations.
+- Revisit the SideBar power action only if a TS18-native, non-accessibility
+  command is confirmed. Do not reintroduce AccessibilityService as a default
+  dependency.
 - Improve local playlist management with optional folder diff details and
   better large-playlist editing ergonomics.
 - Add a favorite-artist action only when a stable Yandex Music endpoint is

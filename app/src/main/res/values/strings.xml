@@ -136,6 +136,7 @@
     <string name="accessibility_power_description">Allows YMPlayer SideBar to open the Android power menu from its power button.</string>
     <string name="accessibility_power_status_enabled">Power menu service: enabled</string>
     <string name="accessibility_power_status_disabled">Power menu service: disabled. Enable YMPlayer in Accessibility settings.</string>
+    <string name="accessibility_power_safe_build_disabled">Power menu service is not included in this safe build. Use the full TS18 build if this device allows accessibility side-loaded apps.</string>
     <string name="show_hide_sidebar">Show/hide SideBar</string>
     <string name="open_accessibility_settings">Open accessibility settings for power menu</string>
     <string name="open_battery_settings">Open battery settings</string>

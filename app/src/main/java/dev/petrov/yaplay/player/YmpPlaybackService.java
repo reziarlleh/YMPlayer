@@ -1,6 +1,7 @@
 package dev.petrov.yaplay.player;
 
 import android.Manifest;
+import android.annotation.SuppressLint;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
@@ -1439,6 +1440,7 @@ public class YmpPlaybackService extends MediaBrowserService {
         }
     }
 
+    @SuppressLint("ForegroundServiceType")
     private void ensureForeground() {
         createChannel();
         startForeground(NOTIFICATION_ID, notification());
