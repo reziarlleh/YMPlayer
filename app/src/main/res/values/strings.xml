@@ -132,13 +132,9 @@
     <string name="dislike_track">Dislike</string>
     <string name="enable_embedded_sidebar">Enable built-in SideBar overlay</string>
     <string name="sidebar_auto_hide">Auto-hide SideBar after inactivity</string>
-    <string name="accessibility_power_required">Enable YMPlayer accessibility service for the power menu button</string>
-    <string name="accessibility_power_description">Allows YMPlayer SideBar to open the Android power menu from its power button.</string>
-    <string name="accessibility_power_status_enabled">Power menu service: enabled</string>
-    <string name="accessibility_power_status_disabled">Power menu service: disabled. Enable YMPlayer in Accessibility settings.</string>
-    <string name="accessibility_power_safe_build_disabled">Power menu service is not included in this safe build. Use the full TS18 build if this device allows accessibility side-loaded apps.</string>
+    <string name="power_menu_status_best_effort">SideBar power button: TS18 reboot menu first, Android shutdown dialog fallback.</string>
+    <string name="power_menu_unavailable">Power menu is not available on this firmware without system privileges.</string>
     <string name="show_hide_sidebar">Show/hide SideBar</string>
-    <string name="open_accessibility_settings">Open accessibility settings for power menu</string>
     <string name="open_battery_settings">Open battery settings</string>
     <string name="open_autostart_settings">Open autostart settings</string>
     <string name="system_settings_open_failed">Could not open system settings</string>

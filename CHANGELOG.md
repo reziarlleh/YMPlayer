@@ -3,6 +3,21 @@
 This file tracks only working, testable versions. Broken or experimental
 intermediate builds should not be added here.
 
+## 0.4.6 - 2026-06-22
+
+Best-effort SideBar power menu without AccessibilityService.
+
+- Added a non-accessibility SideBar power path based on the TS18 SystemUI
+  finding: first YMPlayer tries to open
+  `com.android.launcher/com.nwd.tools.reboot.RebootActivity`.
+- If the TS18 reboot activity is unavailable or blocked by firmware, YMPlayer
+  falls back to Android's hidden `ACTION_REQUEST_SHUTDOWN` confirmation dialog.
+- Removed the old TS18 `extra_key_value=0` power fallback from YMPlayer because
+  on the test head unit it turns the screen off instead of opening the power
+  menu.
+- The APK still contains no `AccessibilityService` or
+  `BIND_ACCESSIBILITY_SERVICE`.
+
 ## 0.4.5 - 2026-06-22
 
 Install-safe build after Google Play Protect blocked the APK.

@@ -137,17 +137,25 @@
 - Returned to a single install-safe debug APK instead of requiring users to
   choose between safe and full builds.
 
+## Completed In 0.4.6
+
+- Added a best-effort SideBar power path without AccessibilityService.
+- Used the TS18 SystemUI finding that the firmware quick settings open
+  `com.android.launcher/com.nwd.tools.reboot.RebootActivity`.
+- Added Android `ACTION_REQUEST_SHUTDOWN` as a fallback.
+- Removed the old TS18 key-value power fallback because it sleeps the display
+  instead of opening the power menu on the test unit.
+
 ## Planned 0.4.x Features
 
-- Keep 0.4.x focused on stabilization while the user tests 0.4.5 on a real
+- Keep 0.4.x focused on stabilization while the user tests 0.4.6 on a real
   device.
 - Current audit and prioritized fix list: [PROJECT_AUDIT.md](PROJECT_AUDIT.md).
 - Next cleanup priority is reducing stale background UI updates with a shared
   executor and simple cancellation tokens for search/import/source-loading
   operations.
-- Revisit the SideBar power action only if a TS18-native, non-accessibility
-  command is confirmed. Do not reintroduce AccessibilityService as a default
-  dependency.
+- Confirm on device whether the TS18 RebootActivity or Android shutdown
+  fallback opens the desired power/reboot menu.
 - Improve local playlist management with optional folder diff details and
   better large-playlist editing ergonomics.
 - Add a favorite-artist action only when a stable Yandex Music endpoint is

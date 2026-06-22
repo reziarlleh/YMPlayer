@@ -199,7 +199,7 @@ public class EmbeddedSideBarService extends Service {
         addPanelButton(panel, horizontal, R.drawable.ic_side_power, "Power", v -> {
             resetAutoHide();
             if (!YmpPowerMenuHelper.requestPowerDialog(this)) {
-                Toast.makeText(this, R.string.accessibility_power_safe_build_disabled, Toast.LENGTH_LONG).show();
+                Toast.makeText(this, R.string.power_menu_unavailable, Toast.LENGTH_LONG).show();
             }
         });
         addPanelButton(panel, horizontal, R.drawable.ic_side_volume_up, "Volume up", v -> {

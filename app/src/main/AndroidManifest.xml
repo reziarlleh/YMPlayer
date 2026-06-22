@@ -14,8 +14,13 @@
     <queries>
         <package android:name="com.ts18.sidebar" />
         <package android:name="com.launcher" />
+        <package android:name="com.android.launcher" />
+        <package android:name="com.android.launcher2" />
         <intent>
             <action android:name="android.media.action.DISPLAY_AUDIO_EFFECT_CONTROL_PANEL" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.ACTION_REQUEST_SHUTDOWN" />
         </intent>
         <intent>
             <action android:name="android.intent.action.MAIN" />

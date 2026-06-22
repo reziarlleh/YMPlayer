@@ -21,7 +21,6 @@ public final class Ts18AudioControls {
     private static final int KEY_MUTE = 2;
     private static final int KEY_VOLUME_UP = 14;
     private static final int KEY_VOLUME_DOWN = 15;
-    private static final int KEY_POWER = 0;
     private static final int KEY_BACK = 18;
     private static final int KEY_HOME = 20;
 
@@ -56,13 +55,6 @@ public final class Ts18AudioControls {
         }
         requestVolumeDisplay(appContext);
         Diagnostics.log(appContext, "YMP TS18 mute toggle requested");
-        return true;
-    }
-
-    public static boolean power(Context context) {
-        Context appContext = context.getApplicationContext();
-        sendKeyValue(appContext, KEY_POWER);
-        Diagnostics.log(appContext, "YMP TS18 power requested");
         return true;
     }
 

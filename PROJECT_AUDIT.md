@@ -1,7 +1,7 @@
 # YMPlayer Project Audit
 
 Дата: 2026-06-20
-База аудита: `0.4.5`, `versionCode 45`
+База аудита: `0.4.6`, `versionCode 46`
 
 Этот документ фиксирует состояние проекта после перехода от Poweramp-моста к
 самостоятельному YMPlayer. После первичного аудита в 0.4.4 уже выполнена чистка
@@ -31,6 +31,15 @@
   показывает пояснение вместо попытки вызвать power menu через Accessibility.
 - Проект снова собирает один install-safe debug APK без выбора safe/full
   вариантов.
+
+## Выполнено в 0.4.6
+
+- Кнопка питания встроенного SideBar снова активна без AccessibilityService.
+- Первый путь: запуск найденной в TS18 SystemUI активности
+  `com.android.launcher/com.nwd.tools.reboot.RebootActivity`.
+- Второй путь: системный Android `ACTION_REQUEST_SHUTDOWN` с подтверждением.
+- Старый TS18 `extra_key_value=0` fallback удален, потому что на тестовой
+  магнитоле он гасит экран вместо меню выключения/перезагрузки.
 
 ## Карта проекта
 
@@ -84,9 +93,9 @@
   CarWebGuru. В 0.4.3 это важная свежая правка, ее лучше сначала проверить на
   устройстве.
 - Встроенный SideBar: overlay, вытягивание от края, крупные кнопки, настройка
-  автоскрытия, громкость/mute/home/back. Кнопка питания в 0.4.5 отключена,
-  потому что AccessibilityService оказался и установочно рискованным, и
-  ненадежным на TS18.
+  автоскрытия, громкость/mute/home/back. Кнопка питания в 0.4.6 пробует
+  штатную TS18 RebootActivity и Android shutdown-dialog fallback без
+  AccessibilityService.
 - Тихий keep-alive внешнего `com.ts18.sidebar`: `USER_PRESENT` в
   `SideBarHealthReceiver` и `CONFIG_CHANGED` без show/collapse extras. Это
   соответствует текущим заметкам проекта SideBar.
@@ -101,9 +110,10 @@
 - Исправить: имена настроек `sidebar_watchdog`, `sidebarWatchdogBox` уже не
   отражают смысл. Сейчас это управление встроенным SideBar, а не только
   watchdog. Переименовать при ближайшем безопасном рефакторинге.
-- Исправить: найти TS18-native способ открыть системное меню питания без
-  AccessibilityService. До подтверждения такой команды power-кнопку лучше не
-  возвращать в активное состояние.
+- Исправить/подтвердить: проверить на магнитоле, срабатывает ли TS18
+  RebootActivity или Android `ACTION_REQUEST_SHUTDOWN` как меню питания.
+  Если оба пути заблокированы, нужен другой OEM endpoint или системная
+  привилегия; возвращать AccessibilityService не планируется.
 - Исправить: `MainActivity`, `YmpPlaybackService`, `YandexMusicClient` и
   `LocalPlaylistStore` стали слишком большими. Резать их надо осторожно после
   стабилизации, иначе можно сломать уже рабочие сценарии.
@@ -160,7 +170,7 @@
 
 ### 0.4.x stabilization
 
-1. Дождаться теста 0.4.5 на устройстве и не трогать My Wave/CarWebGuru/SideBar
+1. Дождаться теста 0.4.6 на устройстве и не трогать My Wave/CarWebGuru/SideBar
    без подтвержденного бага.
 2. Навести порядок в фоновых задачах: executor, отмена устаревших source-load
    и search/import операций.
