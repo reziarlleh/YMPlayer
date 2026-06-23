@@ -23,11 +23,14 @@ public final class YmpPowerMenuHelper {
     }
 
     public static boolean isEnabled(Context context) {
-        return true;
+        return YmpAccessibilityService.isEnabled(context);
     }
 
     public static boolean requestPowerDialog(Context context) {
         Context appContext = context.getApplicationContext();
+        if (YmpAccessibilityService.requestPowerDialog(appContext)) {
+            return true;
+        }
         if (tryStartTs18RebootActivity(appContext)) {
             return true;
         }

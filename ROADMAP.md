@@ -146,16 +146,28 @@
 - Removed the old TS18 key-value power fallback because it sleeps the display
   instead of opening the power menu on the test unit.
 
+## Completed In 0.4.7
+
+- Restored a minimal optional accessibility service for the embedded SideBar
+  power button, matching the standalone SideBar flow.
+- Added settings status plus a button that opens Android Accessibility settings
+  for manually enabling the YMPlayer service.
+- Kept the service narrow: no window-content retrieval, no automatic enable
+  attempt, and no dependency for playback or Yandex Music features.
+- Power button order is now accessibility `GLOBAL_ACTION_POWER_DIALOG`, TS18
+  `RebootActivity`, then Android `ACTION_REQUEST_SHUTDOWN` fallback.
+
 ## Planned 0.4.x Features
 
-- Keep 0.4.x focused on stabilization while the user tests 0.4.6 on a real
+- Keep 0.4.x focused on stabilization while the user tests 0.4.7 on a real
   device.
 - Current audit and prioritized fix list: [PROJECT_AUDIT.md](PROJECT_AUDIT.md).
 - Next cleanup priority is reducing stale background UI updates with a shared
   executor and simple cancellation tokens for search/import/source-loading
   operations.
-- Confirm on device whether the TS18 RebootActivity or Android shutdown
-  fallback opens the desired power/reboot menu.
+- Confirm on device whether TS18 keeps the optional YMPlayer accessibility
+  service enabled and whether the SideBar power button opens the desired
+  power/reboot menu.
 - Improve local playlist management with optional folder diff details and
   better large-playlist editing ergonomics.
 - Add a favorite-artist action only when a stable Yandex Music endpoint is

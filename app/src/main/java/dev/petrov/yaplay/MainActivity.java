@@ -2179,7 +2179,10 @@ public class MainActivity extends Activity {
         });
         root.addView(sidebarAutoHideBox, spaced());
         addButton(root, R.string.show_hide_sidebar, v -> toggleEmbeddedSideBar());
-        addLibraryStatusRow(root, getString(R.string.power_menu_status_best_effort));
+        addLibraryStatusRow(root, getString(YmpPowerMenuHelper.isEnabled(this)
+                ? R.string.accessibility_power_status_enabled
+                : R.string.accessibility_power_status_disabled));
+        addButton(root, R.string.open_accessibility_settings, v -> openAccessibilitySettings());
         addButton(root, R.string.open_battery_settings, v -> openBatterySettings());
         addButton(root, R.string.open_autostart_settings, v -> openAutostartSettings());
 
@@ -2959,6 +2962,15 @@ public class MainActivity extends Activity {
                 || tryStartSettings(new Intent(Settings.ACTION_BATTERY_SAVER_SETTINGS))
                 || openAppDetailsSettings()) {
             updateStatus(statusWithCache("Opened battery settings"));
+            return;
+        }
+        updateStatus(statusWithCache(getString(R.string.system_settings_open_failed)));
+        Toast.makeText(this, R.string.system_settings_open_failed, Toast.LENGTH_SHORT).show();
+    }
+
+    private void openAccessibilitySettings() {
+        if (tryStartSettings(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))) {
+            updateStatus(statusWithCache(getString(R.string.accessibility_power_required)));
             return;
         }
         updateStatus(statusWithCache(getString(R.string.system_settings_open_failed)));

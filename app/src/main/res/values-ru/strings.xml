@@ -119,9 +119,13 @@
     <string name="settings_close">Закрыть</string>
     <string name="enable_embedded_sidebar">Включить встроенный сайдбар поверх экрана</string>
     <string name="sidebar_auto_hide">Автоматически скрывать сайдбар при бездействии</string>
-    <string name="power_menu_status_best_effort">Кнопка питания сайдбара: сначала меню перезагрузки TS18, затем системный диалог выключения Android.</string>
+    <string name="accessibility_power_required">Включите службу специальных возможностей YMPlayer для кнопки питания сайдбара</string>
+    <string name="accessibility_power_description">Позволяет встроенному сайдбару YMPlayer открывать системное меню питания Android по кнопке питания сайдбара.</string>
+    <string name="accessibility_power_status_enabled">Служба питания сайдбара: включена</string>
+    <string name="accessibility_power_status_disabled">Служба питания сайдбара: выключена. Включите YMPlayer в специальных возможностях.</string>
     <string name="power_menu_unavailable">Меню питания недоступно на этой прошивке без системных прав.</string>
     <string name="show_hide_sidebar">Показать/скрыть сайдбар</string>
+    <string name="open_accessibility_settings">Открыть специальные возможности для кнопки питания</string>
     <string name="open_battery_settings">Открыть настройки энергосбережения</string>
     <string name="open_autostart_settings">Открыть настройки автозапуска</string>
     <string name="system_settings_open_failed">Не удалось открыть системные настройки</string>

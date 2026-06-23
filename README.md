@@ -13,11 +13,11 @@ YMPlayer - неофициальный плеер Яндекс Музыки дл�
 
 ## Скачать
 
-Текущая рабочая сборка: **0.4.6**, `versionCode 46`.
+Текущая рабочая сборка: **0.4.7**, `versionCode 47`.
 
-- GitHub Release: [YMPlayer 0.4.6](https://github.com/reziarlleh/YMPlayer/releases/tag/v0.4.6)
-- APK в репозитории: [releases/0.4.6/YMPlayer-v0.4.6-debug-b46.apk](releases/0.4.6/YMPlayer-v0.4.6-debug-b46.apk)
-- Прямая ссылка на APK из релиза: [YMPlayer-v0.4.6-debug-b46.apk](https://github.com/reziarlleh/YMPlayer/releases/download/v0.4.6/YMPlayer-v0.4.6-debug-b46.apk)
+- GitHub Release: [YMPlayer 0.4.7](https://github.com/reziarlleh/YMPlayer/releases/tag/v0.4.7)
+- APK в репозитории: [releases/0.4.7/YMPlayer-v0.4.7-debug-b47.apk](releases/0.4.7/YMPlayer-v0.4.7-debug-b47.apk)
+- Прямая ссылка на APK из релиза: [YMPlayer-v0.4.7-debug-b47.apk](https://github.com/reziarlleh/YMPlayer/releases/download/v0.4.7/YMPlayer-v0.4.7-debug-b47.apk)
 
 Путь `app/build/outputs/apk/debug/...` появляется только после локальной сборки
 через Gradle и не является файлом в GitHub-репозитории.
@@ -66,9 +66,9 @@ YMPlayer - неофициальный плеер Яндекс Музыки дл�
 - Кнопка EQ/DSP с выбором найденного приложения эквалайзера.
 - Встроенный SideBar-оверлей для TS18: включается в настройках, показывается и
   скрывается с главного экрана.
-- Сборка не содержит AccessibilityService: это убирает блокировку Google Play
-  Protect на телефонах. Кнопка питания встроенного SideBar пробует открыть
-  штатное TS18-меню перезагрузки, затем системный диалог выключения Android.
+- Кнопка питания встроенного SideBar может открывать системное меню питания
+  через опциональную службу специальных возможностей YMPlayer. Служба не
+  требуется для плеера и включается только вручную через системные настройки.
 - TS18-совместимые команды громкости/mute через NWD broadcasts с Android
   AudioManager fallback на обычных устройствах.
 - Диагностика внутри приложения с копированием лога для тестирования на
@@ -125,11 +125,12 @@ YMPlayer - неофициальный плеер Яндекс Музыки дл�
 home, back и скрытие панели. Размер кнопок в YMPlayer оставлен крупнее исходного
 варианта.
 
-В сборке 0.4.6 нет AccessibilityService. Это осознанное решение: Play Protect
-может полностью блокировать sideload-приложения со службой специальных
-возможностей, а на TS18-магнитоле такая служба может самопроизвольно
-отключаться. Кнопка питания встроенного SideBar сначала пытается открыть
-штатную активность прошивки
+Для кнопки питания можно вручную включить службу специальных возможностей
+YMPlayer. Приложение не включает ее само и не требует для работы плеера: в
+настройках YMPlayer есть пункт, который открывает системный экран специальных
+возможностей. Если служба включена, power-кнопка вызывает Android
+`GLOBAL_ACTION_POWER_DIALOG`. Если служба выключена или прошивка ее отключила,
+YMPlayer пробует открыть штатную активность прошивки
 `com.android.launcher/com.nwd.tools.reboot.RebootActivity`, найденную в TS18
 SystemUI, затем пробует системный `ACTION_REQUEST_SHUTDOWN`. Старый fallback
 через `extra_key_value=0` удален, потому что он уводит экран в сон.
@@ -152,7 +153,7 @@ $env:Path = "$env:JAVA_HOME\bin;$env:Path"
 После локальной сборки APK будет лежать в:
 
 ```text
-app/build/outputs/apk/debug/YMPlayer-v0.4.6-debug-b46.apk
+app/build/outputs/apk/debug/YMPlayer-v0.4.7-debug-b47.apk
 ```
 
 Этот путь относится только к локальной машине разработчика. На GitHub готовые

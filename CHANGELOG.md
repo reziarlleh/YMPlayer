@@ -3,6 +3,21 @@
 This file tracks only working, testable versions. Broken or experimental
 intermediate builds should not be added here.
 
+## 0.4.7 - 2026-06-23
+
+Optional SideBar power-menu service.
+
+- Restored a minimal optional YMPlayer accessibility service only for the
+  embedded SideBar power button.
+- The service is not enabled automatically and is not required for normal
+  player playback. Settings show its current status and open Android
+  Accessibility settings, matching the standalone SideBar flow.
+- The power button first uses Android `GLOBAL_ACTION_POWER_DIALOG` when the
+  service is enabled, then falls back to the TS18 reboot activity and Android
+  shutdown confirmation request.
+- The service does not retrieve window content and is not used for playback,
+  library, Yandex Music authorization, or cache behavior.
+
 ## 0.4.6 - 2026-06-22
 
 Best-effort SideBar power menu without AccessibilityService.
