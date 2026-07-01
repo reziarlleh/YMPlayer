@@ -3,6 +3,21 @@
 This file tracks only working, testable versions. Broken or experimental
 intermediate builds should not be added here.
 
+## 0.4.8 - 2026-07-01
+
+TS18 SideBar power-menu fallbacks that do not rely only on Accessibility.
+
+- Kept the working optional `GLOBAL_ACTION_POWER_DIALOG` path through the
+  manually enabled YMPlayer accessibility service.
+- Added a second TS18 reboot UI candidate from the factory launcher table:
+  `com.nwd.toolallinone.app/com.nwd.tools.reboot.RebootActivity`.
+- Added launcher-mediated TS18 start requests for the reboot UI through
+  `com.nwd.ACTION_REQUEST_START_ACTIVITY`, `com.nwd.action.ACTION_START_ACTIVITY`,
+  and `com.nwd.action.ACTION_START_NWD_ACTIVITY` with `extra_package_name` and
+  `extra_class_name`.
+- Kept the Android `ACTION_REQUEST_SHUTDOWN` fallback, but still avoids direct
+  MCU power-off and the old `extra_key_value=0` sleep path.
+
 ## 0.4.7 - 2026-06-23
 
 Optional SideBar power-menu service.

@@ -1,7 +1,7 @@
 # YMPlayer Project Audit
 
-Дата: 2026-06-23
-База аудита: `0.4.7`, `versionCode 47`
+Дата: 2026-07-01
+База аудита: `0.4.8`, `versionCode 48`
 
 Этот документ фиксирует состояние проекта после перехода от Poweramp-моста к
 самостоятельному YMPlayer. После первичного аудита в 0.4.4 уже выполнена чистка
@@ -53,6 +53,19 @@
   Android `ACTION_REQUEST_SHUTDOWN`.
 - Служба не читает содержимое окон и не участвует в воспроизведении,
   авторизации Яндекса, поиске или кэше.
+
+## Выполнено в 0.4.8
+
+- Добавлены обходные пути кнопки питания встроенного SideBar на случай, если
+  TS18-прошивка отключает опциональную Accessibility-службу YMPlayer.
+- `YmpPowerMenuHelper` теперь пробует второй найденный reboot UI компонент:
+  `com.nwd.toolallinone.app/com.nwd.tools.reboot.RebootActivity`.
+- После прямых запусков helper отправляет штатные TS18 launcher-запросы
+  `com.nwd.ACTION_REQUEST_START_ACTIVITY`, `com.nwd.action.ACTION_START_ACTIVITY`
+  и `com.nwd.action.ACTION_START_NWD_ACTIVITY` с `extra_package_name` и
+  `extra_class_name`, чтобы launcher сам открыл reboot UI.
+- Прямой `com.nwd.action.ACTION_MCU_POWER_OFF` не используется: цель этой
+  сборки - открыть запрос/подтверждение, а не выполнять немедленное действие.
 
 ## Карта проекта
 
@@ -106,10 +119,10 @@
   CarWebGuru. В 0.4.3 это важная свежая правка, ее лучше сначала проверить на
   устройстве.
 - Встроенный SideBar: overlay, вытягивание от края, крупные кнопки, настройка
-  автоскрытия, громкость/mute/home/back. Кнопка питания в 0.4.7 сначала
+  автоскрытия, громкость/mute/home/back. Кнопка питания в 0.4.8 сначала
   использует опциональную Accessibility-службу YMPlayer для системного power
-  dialog, затем пробует штатную TS18 RebootActivity и Android shutdown-dialog
-  fallback.
+  dialog, затем пробует прямые TS18 RebootActivity-компоненты, штатные
+  TS18 launcher start-запросы и Android shutdown-dialog fallback.
 - Тихий keep-alive внешнего `com.ts18.sidebar`: `USER_PRESENT` в
   `SideBarHealthReceiver` и `CONFIG_CHANGED` без show/collapse extras. Это
   соответствует текущим заметкам проекта SideBar.
@@ -124,11 +137,12 @@
 - Исправить: имена настроек `sidebar_watchdog`, `sidebarWatchdogBox` уже не
   отражают смысл. Сейчас это управление встроенным SideBar, а не только
   watchdog. Переименовать при ближайшем безопасном рефакторинге.
-- Исправить/подтвердить: проверить на магнитоле, удерживает ли TS18 включенной
-  опциональную службу YMPlayer и вызывает ли она меню питания/перезагрузки.
-  Если прошивка отключает службу, проверить TS18 RebootActivity и Android
-  `ACTION_REQUEST_SHUTDOWN`; если все пути заблокированы, нужен другой OEM
-  endpoint или системная привилегия.
+- Исправить/подтвердить: проверить на магнитоле с выключенной Accessibility-
+  службой, открывает ли 0.4.8 reboot UI через второй компонент
+  `com.nwd.toolallinone.app` или через TS18 launcher-mediated start broadcasts.
+  Если все запросные пути заблокированы, останутся только системная привилегия,
+  firmware-specific API или отказ от программной кнопки питания без root/OEM
+  подписи.
 - Исправить: `MainActivity`, `YmpPlaybackService`, `YandexMusicClient` и
   `LocalPlaylistStore` стали слишком большими. Резать их надо осторожно после
   стабилизации, иначе можно сломать уже рабочие сценарии.
@@ -185,7 +199,7 @@
 
 ### 0.4.x stabilization
 
-1. Дождаться теста 0.4.7 на устройстве и не трогать My Wave/CarWebGuru/SideBar
+1. Дождаться теста 0.4.8 на устройстве и не трогать My Wave/CarWebGuru/SideBar
    без подтвержденного бага.
 2. Навести порядок в фоновых задачах: executor, отмена устаревших source-load
    и search/import операций.

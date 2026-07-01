@@ -157,9 +157,22 @@
 - Power button order is now accessibility `GLOBAL_ACTION_POWER_DIALOG`, TS18
   `RebootActivity`, then Android `ACTION_REQUEST_SHUTDOWN` fallback.
 
+## Completed In 0.4.8
+
+- Added TS18 power-menu fallbacks for cases where the head unit disables the
+  optional accessibility service.
+- Added the second factory reboot UI component
+  `com.nwd.toolallinone.app/com.nwd.tools.reboot.RebootActivity`.
+- Added launcher-mediated start requests through
+  `com.nwd.ACTION_REQUEST_START_ACTIVITY`, `com.nwd.action.ACTION_START_ACTIVITY`,
+  and `com.nwd.action.ACTION_START_NWD_ACTIVITY` with `extra_package_name` and
+  `extra_class_name`.
+- Avoided direct `ACTION_MCU_POWER_OFF` and the known TS18 sleep key path because
+  the desired behavior is a confirmation request, not immediate power-off/sleep.
+
 ## Planned 0.4.x Features
 
-- Keep 0.4.x focused on stabilization while the user tests 0.4.7 on a real
+- Keep 0.4.x focused on stabilization while the user tests 0.4.8 on a real
   device.
 - Current audit and prioritized fix list: [PROJECT_AUDIT.md](PROJECT_AUDIT.md).
 - Next cleanup priority is reducing stale background UI updates with a shared

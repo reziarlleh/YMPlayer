@@ -13,11 +13,11 @@ YMPlayer - неофициальный плеер Яндекс Музыки дл�
 
 ## Скачать
 
-Текущая рабочая сборка: **0.4.7**, `versionCode 47`.
+Текущая рабочая сборка: **0.4.8**, `versionCode 48`.
 
-- GitHub Release: [YMPlayer 0.4.7](https://github.com/reziarlleh/YMPlayer/releases/tag/v0.4.7)
-- APK в репозитории: [releases/0.4.7/YMPlayer-v0.4.7-debug-b47.apk](releases/0.4.7/YMPlayer-v0.4.7-debug-b47.apk)
-- Прямая ссылка на APK из релиза: [YMPlayer-v0.4.7-debug-b47.apk](https://github.com/reziarlleh/YMPlayer/releases/download/v0.4.7/YMPlayer-v0.4.7-debug-b47.apk)
+- GitHub Release: [YMPlayer 0.4.8](https://github.com/reziarlleh/YMPlayer/releases/tag/v0.4.8)
+- APK в репозитории: [releases/0.4.8/YMPlayer-v0.4.8-debug-b48.apk](releases/0.4.8/YMPlayer-v0.4.8-debug-b48.apk)
+- Прямая ссылка на APK из релиза: [YMPlayer-v0.4.8-debug-b48.apk](https://github.com/reziarlleh/YMPlayer/releases/download/v0.4.8/YMPlayer-v0.4.8-debug-b48.apk)
 
 Путь `app/build/outputs/apk/debug/...` появляется только после локальной сборки
 через Gradle и не является файлом в GitHub-репозитории.
@@ -130,10 +130,15 @@ YMPlayer. Приложение не включает ее само и не тр�
 настройках YMPlayer есть пункт, который открывает системный экран специальных
 возможностей. Если служба включена, power-кнопка вызывает Android
 `GLOBAL_ACTION_POWER_DIALOG`. Если служба выключена или прошивка ее отключила,
-YMPlayer пробует открыть штатную активность прошивки
-`com.android.launcher/com.nwd.tools.reboot.RebootActivity`, найденную в TS18
-SystemUI, затем пробует системный `ACTION_REQUEST_SHUTDOWN`. Старый fallback
-через `extra_key_value=0` удален, потому что он уводит экран в сон.
+YMPlayer пробует открыть найденные штатные активности прошивки
+`com.android.launcher/com.nwd.tools.reboot.RebootActivity` и
+`com.nwd.toolallinone.app/com.nwd.tools.reboot.RebootActivity`, затем отправляет
+TS18 launcher-запросы `ACTION_REQUEST_START_ACTIVITY`, `ACTION_START_ACTIVITY`
+и `ACTION_START_NWD_ACTIVITY` с `extra_package_name`/`extra_class_name` для
+открытия этого же reboot UI от имени launcher. Системный
+`ACTION_REQUEST_SHUTDOWN` остается последним fallback. Прямой
+`ACTION_MCU_POWER_OFF` и старый путь `extra_key_value=0` не используются,
+потому что они могут выключать/усыплять устройство без нужного меню.
 
 На TS18-магнитолах YMPlayer отправляет `com.nwd.action.ACTION_KEY_VALUE` только
 с `extra_key_value` либо `com.nwd.can.action.ACTION_PLATFORM_SEND_CAN_VOLUME`,
@@ -153,7 +158,7 @@ $env:Path = "$env:JAVA_HOME\bin;$env:Path"
 После локальной сборки APK будет лежать в:
 
 ```text
-app/build/outputs/apk/debug/YMPlayer-v0.4.7-debug-b47.apk
+app/build/outputs/apk/debug/YMPlayer-v0.4.8-debug-b48.apk
 ```
 
 Этот путь относится только к локальной машине разработчика. На GitHub готовые
