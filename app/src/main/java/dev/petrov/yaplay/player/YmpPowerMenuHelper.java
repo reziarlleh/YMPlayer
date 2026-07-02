@@ -35,22 +35,17 @@ public final class YmpPowerMenuHelper {
         return true;
     }
 
-    public static boolean isEnabled(Context context) {
-        return YmpAccessibilityService.isEnabled(context);
+    public static boolean requestShutdown(Context context) {
+        Context appContext = context.getApplicationContext();
+        return tryStartAndroidShutdownDialog(appContext);
     }
 
-    public static boolean requestPowerDialog(Context context) {
+    public static boolean requestReboot(Context context) {
         Context appContext = context.getApplicationContext();
-        if (YmpAccessibilityService.requestPowerDialog(appContext)) {
-            return true;
-        }
         if (tryStartTs18RebootActivity(appContext)) {
             return true;
         }
-        if (trySendTs18LauncherStartRequest(appContext)) {
-            return true;
-        }
-        return tryStartAndroidShutdownDialog(appContext);
+        return trySendTs18LauncherStartRequest(appContext);
     }
 
     private static boolean tryStartTs18RebootActivity(Context context) {

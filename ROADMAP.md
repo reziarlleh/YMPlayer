@@ -170,17 +170,27 @@
 - Avoided direct `ACTION_MCU_POWER_OFF` and the known TS18 sleep key path because
   the desired behavior is a confirmation request, not immediate power-off/sleep.
 
+## Completed In 0.4.9
+
+- Removed the current AccessibilityService implementation, manifest entry, XML
+  metadata, settings status, and Accessibility settings shortcut.
+- Kept the confirmed TS18 reboot request path and moved it to a separate
+  embedded SideBar reboot button.
+- Changed the original embedded SideBar power button to request shutdown through
+  Android `ACTION_REQUEST_SHUTDOWN`.
+- Kept direct `ACTION_MCU_POWER_OFF` disabled because it is not a confirmation
+  request.
+
 ## Planned 0.4.x Features
 
-- Keep 0.4.x focused on stabilization while the user tests 0.4.8 on a real
+- Keep 0.4.x focused on stabilization while the user tests 0.4.9 on a real
   device.
 - Current audit and prioritized fix list: [PROJECT_AUDIT.md](PROJECT_AUDIT.md).
 - Next cleanup priority is reducing stale background UI updates with a shared
   executor and simple cancellation tokens for search/import/source-loading
   operations.
-- Confirm on device whether TS18 keeps the optional YMPlayer accessibility
-  service enabled and whether the SideBar power button opens the desired
-  power/reboot menu.
+- Confirm on device whether the new SideBar shutdown button opens the desired
+  power-off request on TS18.
 - Improve local playlist management with optional folder diff details and
   better large-playlist editing ergonomics.
 - Add a favorite-artist action only when a stable Yandex Music endpoint is

@@ -13,11 +13,11 @@ YMPlayer - неофициальный плеер Яндекс Музыки дл�
 
 ## Скачать
 
-Текущая рабочая сборка: **0.4.8**, `versionCode 48`.
+Текущая рабочая сборка: **0.4.9**, `versionCode 49`.
 
-- GitHub Release: [YMPlayer 0.4.8](https://github.com/reziarlleh/YMPlayer/releases/tag/v0.4.8)
-- APK в репозитории: [releases/0.4.8/YMPlayer-v0.4.8-debug-b48.apk](releases/0.4.8/YMPlayer-v0.4.8-debug-b48.apk)
-- Прямая ссылка на APK из релиза: [YMPlayer-v0.4.8-debug-b48.apk](https://github.com/reziarlleh/YMPlayer/releases/download/v0.4.8/YMPlayer-v0.4.8-debug-b48.apk)
+- GitHub Release: [YMPlayer 0.4.9](https://github.com/reziarlleh/YMPlayer/releases/tag/v0.4.9)
+- APK в репозитории: [releases/0.4.9/YMPlayer-v0.4.9-debug-b49.apk](releases/0.4.9/YMPlayer-v0.4.9-debug-b49.apk)
+- Прямая ссылка на APK из релиза: [YMPlayer-v0.4.9-debug-b49.apk](https://github.com/reziarlleh/YMPlayer/releases/download/v0.4.9/YMPlayer-v0.4.9-debug-b49.apk)
 
 Путь `app/build/outputs/apk/debug/...` появляется только после локальной сборки
 через Gradle и не является файлом в GitHub-репозитории.
@@ -125,20 +125,16 @@ YMPlayer - неофициальный плеер Яндекс Музыки дл�
 home, back и скрытие панели. Размер кнопок в YMPlayer оставлен крупнее исходного
 варианта.
 
-Для кнопки питания можно вручную включить службу специальных возможностей
-YMPlayer. Приложение не включает ее само и не требует для работы плеера: в
-настройках YMPlayer есть пункт, который открывает системный экран специальных
-возможностей. Если служба включена, power-кнопка вызывает Android
-`GLOBAL_ACTION_POWER_DIALOG`. Если служба выключена или прошивка ее отключила,
-YMPlayer пробует открыть найденные штатные активности прошивки
-`com.android.launcher/com.nwd.tools.reboot.RebootActivity` и
-`com.nwd.toolallinone.app/com.nwd.tools.reboot.RebootActivity`, затем отправляет
-TS18 launcher-запросы `ACTION_REQUEST_START_ACTIVITY`, `ACTION_START_ACTIVITY`
-и `ACTION_START_NWD_ACTIVITY` с `extra_package_name`/`extra_class_name` для
-открытия этого же reboot UI от имени launcher. Системный
-`ACTION_REQUEST_SHUTDOWN` остается последним fallback. Прямой
+Встроенный SideBar не использует AccessibilityService. Кнопка питания отдельно
+запрашивает выключение через Android `ACTION_REQUEST_SHUTDOWN`. Для
+перезагрузки добавлена отдельная кнопка, которая использует подтвержденный на
+TS18 путь: прямой запуск
+`com.android.launcher/com.nwd.tools.reboot.RebootActivity` или
+`com.nwd.toolallinone.app/com.nwd.tools.reboot.RebootActivity`, затем
+launcher-запросы `ACTION_REQUEST_START_ACTIVITY`, `ACTION_START_ACTIVITY` и
+`ACTION_START_NWD_ACTIVITY` с `extra_package_name`/`extra_class_name`. Прямой
 `ACTION_MCU_POWER_OFF` и старый путь `extra_key_value=0` не используются,
-потому что они могут выключать/усыплять устройство без нужного меню.
+потому что они могут выключать/усыплять устройство без нужного подтверждения.
 
 На TS18-магнитолах YMPlayer отправляет `com.nwd.action.ACTION_KEY_VALUE` только
 с `extra_key_value` либо `com.nwd.can.action.ACTION_PLATFORM_SEND_CAN_VOLUME`,
@@ -158,7 +154,7 @@ $env:Path = "$env:JAVA_HOME\bin;$env:Path"
 После локальной сборки APK будет лежать в:
 
 ```text
-app/build/outputs/apk/debug/YMPlayer-v0.4.8-debug-b48.apk
+app/build/outputs/apk/debug/YMPlayer-v0.4.9-debug-b49.apk
 ```
 
 Этот путь относится только к локальной машине разработчика. На GitHub готовые

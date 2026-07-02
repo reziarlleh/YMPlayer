@@ -196,10 +196,16 @@ public class EmbeddedSideBarService extends Service {
             return false;
         });
 
-        addPanelButton(panel, horizontal, R.drawable.ic_side_power, "Power", v -> {
+        addPanelButton(panel, horizontal, R.drawable.ic_side_power, "Power off", v -> {
             resetAutoHide();
-            if (!YmpPowerMenuHelper.requestPowerDialog(this)) {
-                Toast.makeText(this, R.string.power_menu_unavailable, Toast.LENGTH_LONG).show();
+            if (!YmpPowerMenuHelper.requestShutdown(this)) {
+                Toast.makeText(this, R.string.shutdown_menu_unavailable, Toast.LENGTH_LONG).show();
+            }
+        });
+        addPanelButton(panel, horizontal, R.drawable.ic_side_reboot, "Reboot", v -> {
+            resetAutoHide();
+            if (!YmpPowerMenuHelper.requestReboot(this)) {
+                Toast.makeText(this, R.string.reboot_menu_unavailable, Toast.LENGTH_LONG).show();
             }
         });
         addPanelButton(panel, horizontal, R.drawable.ic_side_volume_up, "Volume up", v -> {

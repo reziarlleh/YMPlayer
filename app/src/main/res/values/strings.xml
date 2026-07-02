@@ -132,13 +132,9 @@
     <string name="dislike_track">Dislike</string>
     <string name="enable_embedded_sidebar">Enable built-in SideBar overlay</string>
     <string name="sidebar_auto_hide">Auto-hide SideBar after inactivity</string>
-    <string name="accessibility_power_required">Enable YMPlayer accessibility service for the SideBar power button</string>
-    <string name="accessibility_power_description">Allows YMPlayer SideBar to open Android power menu from the SideBar power button.</string>
-    <string name="accessibility_power_status_enabled">SideBar power service: enabled</string>
-    <string name="accessibility_power_status_disabled">SideBar power service: disabled. Enable YMPlayer in Accessibility settings.</string>
-    <string name="power_menu_unavailable">Power menu is not available on this firmware without system privileges.</string>
+    <string name="shutdown_menu_unavailable">Shutdown request is not available on this firmware without system privileges.</string>
+    <string name="reboot_menu_unavailable">Reboot request is not available on this firmware without system privileges.</string>
     <string name="show_hide_sidebar">Show/hide SideBar</string>
-    <string name="open_accessibility_settings">Open accessibility settings for power button</string>
     <string name="open_battery_settings">Open battery settings</string>
     <string name="open_autostart_settings">Open autostart settings</string>
     <string name="system_settings_open_failed">Could not open system settings</string>

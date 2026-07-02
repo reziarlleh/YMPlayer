@@ -3,6 +3,20 @@
 This file tracks only working, testable versions. Broken or experimental
 intermediate builds should not be added here.
 
+## 0.4.9 - 2026-07-02
+
+Separate SideBar shutdown and reboot buttons, with Accessibility removed again.
+
+- Removed YMPlayer `AccessibilityService`, its manifest declaration, XML
+  metadata, settings status, and the button that opened Android Accessibility
+  settings.
+- Changed the embedded SideBar power button to request shutdown through
+  Android `ACTION_REQUEST_SHUTDOWN`.
+- Added a separate embedded SideBar reboot button that uses the confirmed TS18
+  reboot UI path from 0.4.8.
+- Kept direct `com.nwd.action.ACTION_MCU_POWER_OFF` unused because it is a
+  direct firmware power-off signal, not a confirmation request.
+
 ## 0.4.8 - 2026-07-01
 
 TS18 SideBar power-menu fallbacks that do not rely only on Accessibility.
