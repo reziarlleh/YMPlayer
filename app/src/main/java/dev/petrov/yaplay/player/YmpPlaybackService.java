@@ -13,11 +13,9 @@ import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.media.MediaMetadata;
-import android.media.MediaMetadataRetriever;
 import android.media.MediaPlayer;
 import android.media.browse.MediaBrowser;
 import android.media.session.MediaSession;
-import android.net.Uri;
 import android.media.session.PlaybackState;
 import android.os.Build;
 import android.os.Bundle;
@@ -27,10 +25,6 @@ import android.os.Looper;
 import android.os.ParcelFileDescriptor;
 import android.service.media.MediaBrowserService;
 
-import java.io.ByteArrayOutputStream;
-import java.io.InputStream;
-import java.net.HttpURLConnection;
-import java.net.URL;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -117,6 +111,8 @@ public class YmpPlaybackService extends MediaBrowserService {
     private static final String MEDIA_ID_LIKED_CACHE = "ymp_liked_cache";
     private static final long SIDEBAR_WATCHDOG_INTERVAL_MS = 30_000L;
     private static final long POSITION_SAVE_INTERVAL_MS = 2_000L;
+    private static final int METADATA_COVER_RETRY_MAX = 4;
+    private static final long METADATA_COVER_RETRY_DELAY_MS = 12_000L;
     private static final int PLAY_MODE_ORDER = 0;
     private static final int PLAY_MODE_SHUFFLE = 1;
     private static final int PLAY_MODE_REPEAT = 2;
@@ -171,6 +167,8 @@ public class YmpPlaybackService extends MediaBrowserService {
     private Bitmap metadataCoverBitmap;
     private Bitmap defaultArtworkBitmap;
     private boolean metadataCoverLoading;
+    private String metadataCoverRetryUrl = "";
+    private int metadataCoverRetryCount;
     private long pendingSeekMs;
 
     public static Intent latestStatusSnapshot(Context context) {
@@ -1351,12 +1349,16 @@ public class YmpPlaybackService extends MediaBrowserService {
             metadataCoverUrl = "";
             metadataCoverBitmap = null;
             metadataCoverLoading = false;
+            metadataCoverRetryUrl = "";
+            metadataCoverRetryCount = 0;
             return;
         }
         if (!key.equals(metadataCoverUrl)) {
             metadataCoverUrl = key;
             metadataCoverBitmap = null;
             metadataCoverLoading = false;
+            metadataCoverRetryUrl = key;
+            metadataCoverRetryCount = 0;
         }
         if (metadataCoverBitmap != null || metadataCoverLoading) {
             return;
@@ -1366,8 +1368,8 @@ public class YmpPlaybackService extends MediaBrowserService {
             Bitmap bitmap = null;
             try {
                 bitmap = LocalPlaylistStore.isLocalTrackKey(track.key)
-                        ? localEmbeddedBitmap(track.key)
-                        : downloadBitmap(key);
+                        ? YmpArtworkCache.loadLocalEmbeddedBitmap(this, track.key)
+                        : YmpArtworkCache.loadRemoteBitmap(this, key);
             } catch (Exception ex) {
                 Diagnostics.log(this, "YMP metadata cover load failed", ex);
             }
@@ -1377,52 +1379,37 @@ public class YmpPlaybackService extends MediaBrowserService {
                     metadataCoverBitmap = loaded;
                     metadataCoverLoading = false;
                     if (loaded != null) {
+                        metadataCoverRetryCount = 0;
                         updateSession();
                         updateNotification();
+                    } else {
+                        scheduleMetadataCoverRetry(key);
                     }
                 }
             });
         }, "YMP-MetadataCover").start();
     }
 
-    private Bitmap localEmbeddedBitmap(String localTrackKey) {
-        Uri uri = LocalPlaylistStore.uriFromTrackKey(localTrackKey);
-        if (uri == null) {
-            return null;
+    private void scheduleMetadataCoverRetry(String key) {
+        if (key == null || key.isEmpty()) {
+            return;
         }
-        MediaMetadataRetriever retriever = new MediaMetadataRetriever();
-        try {
-            retriever.setDataSource(this, uri);
-            byte[] bytes = retriever.getEmbeddedPicture();
-            return bytes == null || bytes.length == 0
-                    ? null
-                    : BitmapFactory.decodeByteArray(bytes, 0, bytes.length);
-        } catch (Exception ex) {
-            return null;
-        } finally {
-            try {
-                retriever.release();
-            } catch (Exception ignored) {
+        if (!key.equals(metadataCoverRetryUrl)) {
+            metadataCoverRetryUrl = key;
+            metadataCoverRetryCount = 0;
+        }
+        if (metadataCoverRetryCount >= METADATA_COVER_RETRY_MAX) {
+            return;
+        }
+        metadataCoverRetryCount++;
+        mainHandler.postDelayed(() -> {
+            if (key.equals(metadataCoverUrl)
+                    && metadataCoverBitmap == null
+                    && !metadataCoverLoading) {
+                updateSession();
+                updateNotification();
             }
-        }
-    }
-
-    private static Bitmap downloadBitmap(String url) throws Exception {
-        HttpURLConnection connection = (HttpURLConnection) new URL(url).openConnection();
-        connection.setConnectTimeout(8000);
-        connection.setReadTimeout(8000);
-        try (InputStream input = connection.getInputStream()) {
-            ByteArrayOutputStream output = new ByteArrayOutputStream();
-            byte[] buffer = new byte[16 * 1024];
-            int read;
-            while ((read = input.read(buffer)) != -1) {
-                output.write(buffer, 0, read);
-            }
-            byte[] bytes = output.toByteArray();
-            return BitmapFactory.decodeByteArray(bytes, 0, bytes.length);
-        } finally {
-            connection.disconnect();
-        }
+        }, METADATA_COVER_RETRY_DELAY_MS);
     }
 
     private long mediaPlayerPosition() {

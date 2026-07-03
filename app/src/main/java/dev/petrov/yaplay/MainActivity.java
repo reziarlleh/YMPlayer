@@ -15,13 +15,11 @@ import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.content.res.Configuration;
 import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.GradientDrawable;
 import android.media.AudioManager;
-import android.media.MediaMetadataRetriever;
 import android.media.audiofx.AudioEffect;
 import android.net.Uri;
 import android.os.Build;
@@ -48,12 +46,6 @@ import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import java.io.ByteArrayOutputStream;
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.InputStream;
-import java.net.HttpURLConnection;
-import java.net.URL;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -67,6 +59,7 @@ import dev.petrov.yaplay.player.Ts18AudioControls;
 import dev.petrov.yaplay.player.EmbeddedSideBarService;
 import dev.petrov.yaplay.player.LocalArtworkEnricher;
 import dev.petrov.yaplay.player.LocalPlaylistStore;
+import dev.petrov.yaplay.player.YmpArtworkCache;
 import dev.petrov.yaplay.player.YmpPlaybackService;
 import dev.petrov.yaplay.player.YmpRepository;
 import dev.petrov.yaplay.player.YmpSettings;
@@ -84,6 +77,8 @@ public class MainActivity extends Activity {
     private static final int COLOR_ACCENT_2 = 0xff32d6c2;
     private static final int COLOR_DANGER = 0xffe84a5f;
     private static final int REQUEST_STORAGE_ROOT = 6102;
+    private static final int COVER_RETRY_MAX = 4;
+    private static final long COVER_RETRY_DELAY_MS = 12_000L;
 
     private TextView statusView;
     private ImageView coverView;
@@ -129,6 +124,10 @@ public class MainActivity extends Activity {
     private volatile boolean cacheStatusLoading;
     private String latestDeviceCode = "";
     private String latestCoverUrl = "";
+    private boolean latestCoverLoaded;
+    private boolean latestCoverLoading;
+    private String latestCoverRetryIdentity = "";
+    private int latestCoverRetryCount;
     private int selectedSourceType = YmpPlaybackService.SOURCE_WAVE;
     private int selectedPlaylistKind = -1;
     private String selectedPlaylistTitle = "";
@@ -2620,49 +2619,66 @@ public class MainActivity extends Activity {
         String url = coverUrl == null ? "" : coverUrl.trim();
         String localKey = trackKey == null ? "" : trackKey.trim();
         String identity = url.isEmpty() && LocalPlaylistStore.isLocalTrackKey(localKey) ? localKey : url;
-        if (coverView == null || identity.equals(latestCoverUrl)) {
+        if (coverView == null) {
             return;
         }
+        if (identity.equals(latestCoverUrl) && (latestCoverLoaded || latestCoverLoading)) {
+            return;
+        }
+        if (!identity.equals(latestCoverUrl)) {
+            latestCoverRetryIdentity = identity;
+            latestCoverRetryCount = 0;
+        }
         latestCoverUrl = identity;
+        latestCoverLoaded = false;
+        latestCoverLoading = !identity.isEmpty();
         coverView.setImageResource(R.mipmap.ic_launcher);
+        if (identity.isEmpty()) {
+            latestCoverLoading = false;
+            return;
+        }
         if (url.isEmpty()) {
             if (LocalPlaylistStore.isLocalTrackKey(localKey)) {
                 loadLocalCover(localKey, identity);
+            } else {
+                latestCoverLoading = false;
             }
             return;
         }
         Context appContext = getApplicationContext();
         new Thread(() -> {
-            HttpURLConnection connection = null;
             try {
-                File cached = coverFile(url);
-                Bitmap cachedBitmap = cached.exists() && cached.length() > 0L
-                        ? BitmapFactory.decodeFile(cached.getAbsolutePath())
-                        : null;
-                if (cachedBitmap != null && identity.equals(latestCoverUrl)) {
-                    runOnUiThread(() -> coverView.setImageBitmap(cachedBitmap));
-                    return;
-                }
-                connection = (HttpURLConnection) new URL(url).openConnection();
-                connection.setConnectTimeout(8000);
-                connection.setReadTimeout(8000);
-                try (InputStream input = connection.getInputStream()) {
-                    byte[] bytes = readBytes(input);
-                    Bitmap bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.length);
-                    writeCoverCache(cached, bytes);
-                    if (bitmap != null && identity.equals(latestCoverUrl)) {
-                        runOnUiThread(() -> coverView.setImageBitmap(bitmap));
-                    }
+                Bitmap bitmap = YmpArtworkCache.loadRemoteBitmap(appContext, url);
+                if (bitmap != null && identity.equals(latestCoverUrl)) {
+                    runOnUiThread(() -> {
+                        if (identity.equals(latestCoverUrl)) {
+                            coverView.setImageBitmap(bitmap);
+                            latestCoverLoaded = true;
+                            latestCoverLoading = false;
+                            latestCoverRetryCount = 0;
+                        }
+                    });
                 }
             } catch (Exception ex) {
                 Diagnostics.log(appContext, "YMP cover load failed", ex);
                 if (identity.equals(latestCoverUrl)) {
-                    runOnUiThread(() -> coverView.setImageResource(R.mipmap.ic_launcher));
+                    runOnUiThread(() -> {
+                        if (identity.equals(latestCoverUrl)) {
+                            coverView.setImageResource(R.mipmap.ic_launcher);
+                            latestCoverLoaded = false;
+                            latestCoverLoading = false;
+                            scheduleCoverRetry(url, localKey, identity);
+                        }
+                    });
                 }
-            } finally {
-                if (connection != null) {
-                    connection.disconnect();
-                }
+                return;
+            }
+            if (identity.equals(latestCoverUrl)) {
+                runOnUiThread(() -> {
+                    if (identity.equals(latestCoverUrl)) {
+                        latestCoverLoading = false;
+                    }
+                });
             }
         }, "YMP-Cover").start();
     }
@@ -2670,30 +2686,23 @@ public class MainActivity extends Activity {
     private void loadLocalCover(String localTrackKey, String identity) {
         Context appContext = getApplicationContext();
         new Thread(() -> {
-            Bitmap bitmap = null;
-            try {
-                Uri uri = LocalPlaylistStore.uriFromTrackKey(localTrackKey);
-                if (uri != null) {
-                    MediaMetadataRetriever retriever = new MediaMetadataRetriever();
-                    try {
-                        retriever.setDataSource(appContext, uri);
-                        byte[] bytes = retriever.getEmbeddedPicture();
-                        if (bytes != null && bytes.length > 0) {
-                            bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.length);
-                        }
-                    } finally {
-                        try {
-                            retriever.release();
-                        } catch (Exception ignored) {
-                        }
+            Bitmap loaded = YmpArtworkCache.loadLocalEmbeddedBitmap(appContext, localTrackKey);
+            if (identity.equals(latestCoverUrl)) {
+                runOnUiThread(() -> {
+                    if (!identity.equals(latestCoverUrl)) {
+                        return;
                     }
-                }
-            } catch (Exception ex) {
-                Diagnostics.log(appContext, "YMP local cover load failed", ex);
-            }
-            Bitmap loaded = bitmap;
-            if (loaded != null && identity.equals(latestCoverUrl)) {
-                runOnUiThread(() -> coverView.setImageBitmap(loaded));
+                    if (loaded != null) {
+                        coverView.setImageBitmap(loaded);
+                        latestCoverLoaded = true;
+                        latestCoverRetryCount = 0;
+                    } else {
+                        coverView.setImageResource(R.mipmap.ic_launcher);
+                        latestCoverLoaded = false;
+                        scheduleCoverRetry("", localTrackKey, identity);
+                    }
+                    latestCoverLoading = false;
+                });
             }
         }, "YMP-LocalCover").start();
     }
@@ -2711,34 +2720,14 @@ public class MainActivity extends Activity {
         target.setImageResource(R.mipmap.ic_launcher);
         Context appContext = getApplicationContext();
         new Thread(() -> {
-            HttpURLConnection connection = null;
             try {
-                File cached = coverFile(url);
-                Bitmap cachedBitmap = cached.exists() && cached.length() > 0L
-                        ? BitmapFactory.decodeFile(cached.getAbsolutePath())
-                        : null;
-                if (cachedBitmap != null) {
+                Bitmap bitmap = YmpArtworkCache.loadRemoteBitmap(appContext, url);
+                if (bitmap != null) {
                     runOnUiThread(() -> {
                         if (url.equals(target.getTag())) {
-                            target.setImageBitmap(cachedBitmap);
+                            target.setImageBitmap(bitmap);
                         }
                     });
-                    return;
-                }
-                connection = (HttpURLConnection) new URL(url).openConnection();
-                connection.setConnectTimeout(8000);
-                connection.setReadTimeout(8000);
-                try (InputStream input = connection.getInputStream()) {
-                    byte[] bytes = readBytes(input);
-                    Bitmap bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.length);
-                    writeCoverCache(cached, bytes);
-                    if (bitmap != null) {
-                        runOnUiThread(() -> {
-                            if (url.equals(target.getTag())) {
-                                target.setImageBitmap(bitmap);
-                            }
-                        });
-                    }
                 }
             } catch (Exception ex) {
                 Diagnostics.log(appContext, "YMP thumbnail load failed", ex);
@@ -2747,41 +2736,28 @@ public class MainActivity extends Activity {
                         target.setImageResource(R.mipmap.ic_launcher);
                     }
                 });
-            } finally {
-                if (connection != null) {
-                    connection.disconnect();
-                }
             }
         }, "YMP-Thumb").start();
     }
 
-    private File coverFile(String coverUrl) {
-        File root = new File(getCacheDir(), "covers");
-        return new File(root, Integer.toHexString(coverUrl.hashCode()) + ".img");
-    }
-
-    private static byte[] readBytes(InputStream input) throws Exception {
-        ByteArrayOutputStream output = new ByteArrayOutputStream();
-        byte[] buffer = new byte[16 * 1024];
-        int read;
-        while ((read = input.read(buffer)) != -1) {
-            output.write(buffer, 0, read);
-        }
-        return output.toByteArray();
-    }
-
-    private static void writeCoverCache(File file, byte[] bytes) {
-        if (file == null || bytes == null || bytes.length == 0) {
+    private void scheduleCoverRetry(String coverUrl, String trackKey, String identity) {
+        if (identity == null || identity.isEmpty() || coverView == null) {
             return;
         }
-        File parent = file.getParentFile();
-        if (parent != null && !parent.exists() && !parent.mkdirs()) {
+        if (!identity.equals(latestCoverRetryIdentity)) {
+            latestCoverRetryIdentity = identity;
+            latestCoverRetryCount = 0;
+        }
+        if (latestCoverRetryCount >= COVER_RETRY_MAX) {
             return;
         }
-        try (FileOutputStream output = new FileOutputStream(file)) {
-            output.write(bytes);
-        } catch (Exception ignored) {
-        }
+        latestCoverRetryCount++;
+        ImageView target = coverView;
+        target.postDelayed(() -> {
+            if (identity.equals(latestCoverUrl) && !latestCoverLoaded && !latestCoverLoading) {
+                loadCover(coverUrl, trackKey);
+            }
+        }, COVER_RETRY_DELAY_MS);
     }
 
     private void adjustMusicVolume(int direction) {

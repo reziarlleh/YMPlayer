@@ -13,11 +13,11 @@ YMPlayer - неофициальный плеер Яндекс Музыки дл�
 
 ## Скачать
 
-Текущая рабочая сборка: **0.4.9**, `versionCode 49`.
+Текущая рабочая сборка: **0.4.11**, `versionCode 51`.
 
-- GitHub Release: [YMPlayer 0.4.9](https://github.com/reziarlleh/YMPlayer/releases/tag/v0.4.9)
-- APK в репозитории: [releases/0.4.9/YMPlayer-v0.4.9-debug-b49.apk](releases/0.4.9/YMPlayer-v0.4.9-debug-b49.apk)
-- Прямая ссылка на APK из релиза: [YMPlayer-v0.4.9-debug-b49.apk](https://github.com/reziarlleh/YMPlayer/releases/download/v0.4.9/YMPlayer-v0.4.9-debug-b49.apk)
+- GitHub Release: [YMPlayer 0.4.11](https://github.com/reziarlleh/YMPlayer/releases/tag/v0.4.11)
+- APK в репозитории: [releases/0.4.11/YMPlayer-v0.4.11-debug-b51.apk](releases/0.4.11/YMPlayer-v0.4.11-debug-b51.apk)
+- Прямая ссылка на APK из релиза: [YMPlayer-v0.4.11-debug-b51.apk](https://github.com/reziarlleh/YMPlayer/releases/download/v0.4.11/YMPlayer-v0.4.11-debug-b51.apk)
 
 Путь `app/build/outputs/apk/debug/...` появляется только после локальной сборки
 через Gradle и не является файлом в GitHub-репозитории.
@@ -63,12 +63,17 @@ YMPlayer - неофициальный плеер Яндекс Музыки дл�
 - Если у трека нет доступной обложки или загрузка сорвалась, MediaSession,
   уведомление и главный экран получают стандартную обложку YMPlayer, а не
   оставляют картинку предыдущего трека.
+- Главный экран, уведомление и MediaSession используют общий дисковый кэш
+  обложек и повторяют загрузку после кратковременного сбоя сети/хранилища,
+  что снижает риск увидеть лого YMPlayer вместо реальной обложки после сна
+  магнитолы.
 - Кнопка EQ/DSP с выбором найденного приложения эквалайзера.
 - Встроенный SideBar-оверлей для TS18: включается в настройках, показывается и
   скрывается с главного экрана.
-- Кнопка питания встроенного SideBar может открывать системное меню питания
-  через опциональную службу специальных возможностей YMPlayer. Служба не
-  требуется для плеера и включается только вручную через системные настройки.
+- Кнопка питания встроенного SideBar пытается открыть системное меню питания
+  Android SystemUI `GlobalActions` через скрытый `statusbar` service без
+  AccessibilityService. Для перезагрузки есть отдельная кнопка с подтвержденным
+  TS18 reboot UI.
 - TS18-совместимые команды громкости/mute через NWD broadcasts с Android
   AudioManager fallback на обычных устройствах.
 - Диагностика внутри приложения с копированием лога для тестирования на
@@ -125,10 +130,13 @@ YMPlayer - неофициальный плеер Яндекс Музыки дл�
 home, back и скрытие панели. Размер кнопок в YMPlayer оставлен крупнее исходного
 варианта.
 
-Встроенный SideBar не использует AccessibilityService. Кнопка питания отдельно
-запрашивает выключение через Android `ACTION_REQUEST_SHUTDOWN`. Для
-перезагрузки добавлена отдельная кнопка, которая использует подтвержденный на
-TS18 путь: прямой запуск
+Встроенный SideBar не использует AccessibilityService. Кнопка питания сначала
+пытается открыть Android SystemUI `GlobalActions` через скрытые
+`StatusBarManager.showGlobalActions()` /
+`IStatusBarService.showGlobalActionsMenu()`, найденные при анализе TS18 3.1
+firmware. Если прошивка блокирует этот путь, остаётся запасной
+Android `ACTION_REQUEST_SHUTDOWN`. Для перезагрузки добавлена отдельная кнопка,
+которая использует подтвержденный на TS18 путь: прямой запуск
 `com.android.launcher/com.nwd.tools.reboot.RebootActivity` или
 `com.nwd.toolallinone.app/com.nwd.tools.reboot.RebootActivity`, затем
 launcher-запросы `ACTION_REQUEST_START_ACTIVITY`, `ACTION_START_ACTIVITY` и
@@ -154,7 +162,7 @@ $env:Path = "$env:JAVA_HOME\bin;$env:Path"
 После локальной сборки APK будет лежать в:
 
 ```text
-app/build/outputs/apk/debug/YMPlayer-v0.4.9-debug-b49.apk
+app/build/outputs/apk/debug/YMPlayer-v0.4.11-debug-b51.apk
 ```
 
 Этот путь относится только к локальной машине разработчика. На GitHub готовые

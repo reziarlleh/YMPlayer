@@ -1,7 +1,7 @@
 # YMPlayer Project Audit
 
-Дата: 2026-07-02
-База аудита: `0.4.9`, `versionCode 49`
+Дата: 2026-07-03
+База аудита: `0.4.11`, `versionCode 51`
 
 Этот документ фиксирует состояние проекта после перехода от Poweramp-моста к
 самостоятельному YMPlayer. После первичного аудита в 0.4.4 уже выполнена чистка
@@ -80,6 +80,38 @@
 - `com.nwd.action.ACTION_MCU_POWER_OFF` по-прежнему не используется, потому что
   это прямой firmware power-off event, а не запрос с подтверждением.
 
+## Выполнено в 0.4.10
+
+- Разобрана предоставленная TS18 3.1 прошивка
+  `TS18.3.1_20260611.110603_WINDOW-THEME1(...)`: найдено, что штатное меню
+  питания реализовано в Android SystemUI `GlobalActions`.
+- Подтверждено по исходникам старого SideBar, что рабочий power-dialog путь там
+  был `AccessibilityService.GLOBAL_ACTION_POWER_DIALOG`; fallback
+  `extra_key_value=0` является TS18/NWD power-key и может только усыплять экран.
+- Кнопка выключения встроенного SideBar теперь сначала пробует открыть
+  `GlobalActions` через скрытый `StatusBarManager` и
+  `IStatusBarService.showGlobalActionsMenu()`: для `StatusBarManager`
+  проверяются оба имени метода, `showGlobalActions()` и
+  `showGlobalActionsMenu()`. Затем остаётся старый `ACTION_REQUEST_SHUTDOWN`
+  fallback.
+- Кнопка перезагрузки не изменялась: оставлен подтвержденный TS18
+  `RebootActivity` path.
+- Прямой `ACTION_MCU_POWER_OFF` снова оставлен выключенным: в старом NWD дампе
+  это событие состояния MCU power-off для подсистем, а не UI подтверждения.
+
+## Выполнено в 0.4.11
+
+- Найдена причина периодического лого YMPlayer вместо реальной обложки после
+  сна/ACC: главный экран хранил свой кэш обложек, а MediaSession/notification
+  после восстановления сервиса заново скачивали artwork из сети. При задержке
+  сети CarWebGuru получал стандартное лого.
+- Добавлен общий `YmpArtworkCache` для главного экрана, уведомления и
+  MediaSession metadata.
+- Добавлен ограниченный retry для текущей обложки после временной ошибки сети
+  или SAF/USB-доступа.
+- Decode remote/local artwork теперь ограничивает размер bitmap перед передачей
+  в UI/notification/MediaSession.
+
 ## Карта проекта
 
 - `app/src/main/java/dev/petrov/yaplay/MainActivity.java` - основной UI:
@@ -133,7 +165,9 @@
   устройстве.
 - Встроенный SideBar: overlay, вытягивание от края, крупные кнопки, настройка
   автоскрытия, выключение, перезагрузка, громкость/mute/home/back. Кнопка
-  выключения в 0.4.9 использует Android `ACTION_REQUEST_SHUTDOWN`; отдельная
+  выключения в 0.4.10 использует `StatusBarManager.showGlobalActions()` /
+  `IStatusBarService.showGlobalActionsMenu()` для открытия SystemUI
+  GlobalActions и только потом Android `ACTION_REQUEST_SHUTDOWN`; отдельная
   кнопка перезагрузки использует подтвержденные прямые TS18 RebootActivity-
   компоненты и штатные TS18 launcher start-запросы. AccessibilityService в
   текущем APK отсутствует.
@@ -152,11 +186,11 @@
   отражают смысл. Сейчас это управление встроенным SideBar, а не только
   watchdog. Переименовать при ближайшем безопасном рефакторинге.
 - Исправить/подтвердить: проверить на магнитоле, открывает ли новая кнопка
-  выключения в 0.4.9 именно запрос shutdown через Android
-  `ACTION_REQUEST_SHUTDOWN`. Если прошивка блокирует этот путь, нужен отдельный
-  firmware-specific shutdown request endpoint; прямой `ACTION_MCU_POWER_OFF`
-  использовать только после отдельного явного решения, потому что это не UI
-  подтверждения.
+  выключения в 0.4.10 именно SystemUI GlobalActions/power dialog через
+  `statusbar`. Если прошивка блокирует hidden statusbar вызов для стороннего
+  APK, нужен другой firmware-specific shutdown request endpoint; прямой
+  `ACTION_MCU_POWER_OFF` использовать только после отдельного явного решения,
+  потому что это не UI подтверждения.
 - Исправить: `MainActivity`, `YmpPlaybackService`, `YandexMusicClient` и
   `LocalPlaylistStore` стали слишком большими. Резать их надо осторожно после
   стабилизации, иначе можно сломать уже рабочие сценарии.
@@ -213,7 +247,7 @@
 
 ### 0.4.x stabilization
 
-1. Дождаться теста 0.4.9 на устройстве и не трогать My Wave/CarWebGuru/SideBar
+1. Дождаться теста 0.4.11 на устройстве и не трогать My Wave/CarWebGuru/SideBar
    без подтвержденного бага.
 2. Навести порядок в фоновых задачах: executor, отмена устаревших source-load
    и search/import операций.

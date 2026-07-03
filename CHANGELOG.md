@@ -3,6 +3,38 @@
 This file tracks only working, testable versions. Broken or experimental
 intermediate builds should not be added here.
 
+## 0.4.11 - 2026-07-03
+
+Artwork stability after ACC/sleep resume.
+
+- Added a shared artwork cache used by the main screen, playback notification,
+  and MediaSession metadata, so CarWebGuru can reuse already downloaded covers
+  after the head unit wakes up instead of seeing the YMPlayer logo while the
+  network is still recovering.
+- Added bounded retry for current-track artwork when a cover request fails
+  during wake-up or delayed storage/network availability.
+- Decode remote and embedded artwork with a size cap before putting bitmaps into
+  UI, notification, and MediaSession metadata to reduce memory pressure and
+  binder-size risk on Android car launchers.
+- Kept the 0.4.10 SideBar shutdown/reboot buttons unchanged for testing.
+
+## 0.4.10 - 2026-07-03
+
+TS18 shutdown request path from firmware analysis.
+
+- Investigated the provided TS18 3.1 firmware image and confirmed that the
+  visible power menu is Android SystemUI `GlobalActions`, while the old SideBar
+  power-key fallback only sends the TS18/NWD power key and can put the unit to
+  sleep.
+- Added non-Accessibility shutdown handling through hidden Android
+  `StatusBarManager.showGlobalActions()` /
+  `IStatusBarService.showGlobalActionsMenu()` before the old
+  `ACTION_REQUEST_SHUTDOWN` fallback.
+- Kept the confirmed separate TS18 reboot button and its launcher-mediated
+  `RebootActivity` path unchanged.
+- Kept direct `com.nwd.action.ACTION_MCU_POWER_OFF` disabled: firmware analysis
+  showed it is a power-off state/event broadcast, not a confirmation UI request.
+
 ## 0.4.9 - 2026-07-02
 
 Separate SideBar shutdown and reboot buttons, with Accessibility removed again.

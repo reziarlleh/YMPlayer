@@ -181,16 +181,38 @@
 - Kept direct `ACTION_MCU_POWER_OFF` disabled because it is not a confirmation
   request.
 
+## Completed In 0.4.10
+
+- Investigated the provided TS18 3.1 firmware image for a shutdown request path.
+- Confirmed SystemUI `GlobalActions` is the firmware power-menu UI and old
+  SideBar's reliable power dialog depended on `GLOBAL_ACTION_POWER_DIALOG`.
+- Added non-Accessibility `StatusBarManager` /
+  `IStatusBarService.showGlobalActionsMenu()` attempts before the old Android
+  `ACTION_REQUEST_SHUTDOWN` fallback.
+- Left the working separate TS18 reboot button unchanged.
+- Kept direct `ACTION_MCU_POWER_OFF` disabled because firmware analysis shows it
+  is a power-state event, not a confirmation UI.
+
+## Completed In 0.4.11
+
+- Added a shared artwork cache for the main screen, notification, and
+  MediaSession metadata.
+- Added bounded artwork retry after wake-up/network/storage timing failures.
+- Downsampled remote and embedded artwork before passing bitmaps to Android
+  UI, notification, and MediaSession surfaces.
+- Kept the 0.4.10 TS18 SideBar shutdown/reboot behavior unchanged for the next
+  real-device test.
+
 ## Planned 0.4.x Features
 
-- Keep 0.4.x focused on stabilization while the user tests 0.4.9 on a real
+- Keep 0.4.x focused on stabilization while the user tests 0.4.11 on a real
   device.
 - Current audit and prioritized fix list: [PROJECT_AUDIT.md](PROJECT_AUDIT.md).
 - Next cleanup priority is reducing stale background UI updates with a shared
   executor and simple cancellation tokens for search/import/source-loading
   operations.
 - Confirm on device whether the new SideBar shutdown button opens the desired
-  power-off request on TS18.
+  SystemUI power-off request on TS18.
 - Improve local playlist management with optional folder diff details and
   better large-playlist editing ergonomics.
 - Add a favorite-artist action only when a stable Yandex Music endpoint is
