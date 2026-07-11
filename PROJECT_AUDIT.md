@@ -1,7 +1,7 @@
 # YMPlayer Project Audit
 
-Дата: 2026-07-03
-База аудита: `0.4.11`, `versionCode 51`
+Дата: 2026-07-11
+База аудита: `0.4.12`, `versionCode 52`
 
 Этот документ фиксирует состояние проекта после перехода от Poweramp-моста к
 самостоятельному YMPlayer. После первичного аудита в 0.4.4 уже выполнена чистка
@@ -112,6 +112,21 @@
 - Decode remote/local artwork теперь ограничивает размер bitmap перед передачей
   в UI/notification/MediaSession.
 
+## Выполнено в 0.4.12
+
+- Повторно исследованы полный ext4-раздел TS18 3.1, заводской NWD launcher и
+  SystemUI plugin. Подтверждено, что Android `ACTION_REQUEST_SHUTDOWN` защищен
+  системным разрешением, а одиночный NWD power key может означать сон.
+- Кнопка выключения встроенного SideBar теперь всегда показывает собственное
+  подтверждение YMPlayer поверх экрана и не зависит от AccessibilityService.
+- После подтверждения используется найденный в заводских NWD-библиотеках
+  привилегированный мост `ACTION_SET_SYSTEM_PROP` для запроса
+  `sys.powerctl=shutdown,userrequested`.
+- Резервная power-команда передается как полная последовательность NWD
+  `DOWN -> LONGPRESS -> UP` с `extra_key_type`, а не одиночный
+  `extra_key_value=0`.
+- Подтвержденный путь отдельной кнопки перезагрузки и код плеера не менялись.
+
 ## Карта проекта
 
 - `app/src/main/java/dev/petrov/yaplay/MainActivity.java` - основной UI:
@@ -164,13 +179,12 @@
   CarWebGuru. В 0.4.3 это важная свежая правка, ее лучше сначала проверить на
   устройстве.
 - Встроенный SideBar: overlay, вытягивание от края, крупные кнопки, настройка
-  автоскрытия, выключение, перезагрузка, громкость/mute/home/back. Кнопка
-  выключения в 0.4.10 использует `StatusBarManager.showGlobalActions()` /
-  `IStatusBarService.showGlobalActionsMenu()` для открытия SystemUI
-  GlobalActions и только потом Android `ACTION_REQUEST_SHUTDOWN`; отдельная
-  кнопка перезагрузки использует подтвержденные прямые TS18 RebootActivity-
-  компоненты и штатные TS18 launcher start-запросы. AccessibilityService в
-  текущем APK отсутствует.
+  автоскрытия, выключение, перезагрузка, громкость/mute/home/back. В 0.4.12
+  выключение имеет собственное подтверждение и NWD `sys.powerctl` bridge с
+  резервной типизированной последовательностью длинного power-нажатия;
+  отдельная кнопка перезагрузки использует подтвержденные TS18
+  `RebootActivity`/launcher start-запросы. AccessibilityService в текущем APK
+  отсутствует.
 - Тихий keep-alive внешнего `com.ts18.sidebar`: `USER_PRESENT` в
   `SideBarHealthReceiver` и `CONFIG_CHANGED` без show/collapse extras. Это
   соответствует текущим заметкам проекта SideBar.
@@ -185,12 +199,9 @@
 - Исправить: имена настроек `sidebar_watchdog`, `sidebarWatchdogBox` уже не
   отражают смысл. Сейчас это управление встроенным SideBar, а не только
   watchdog. Переименовать при ближайшем безопасном рефакторинге.
-- Исправить/подтвердить: проверить на магнитоле, открывает ли новая кнопка
-  выключения в 0.4.10 именно SystemUI GlobalActions/power dialog через
-  `statusbar`. Если прошивка блокирует hidden statusbar вызов для стороннего
-  APK, нужен другой firmware-specific shutdown request endpoint; прямой
-  `ACTION_MCU_POWER_OFF` использовать только после отдельного явного решения,
-  потому что это не UI подтверждения.
+- Подтвердить: проверить на магнитоле shutdown-цепочку 0.4.12. В диагностике
+  должны быть видны собственное подтверждение и выбранный firmware path;
+  `ACTION_MCU_POWER_OFF` по-прежнему не используется как команда.
 - Исправить: `MainActivity`, `YmpPlaybackService`, `YandexMusicClient` и
   `LocalPlaylistStore` стали слишком большими. Резать их надо осторожно после
   стабилизации, иначе можно сломать уже рабочие сценарии.
@@ -247,8 +258,8 @@
 
 ### 0.4.x stabilization
 
-1. Дождаться теста 0.4.11 на устройстве и не трогать My Wave/CarWebGuru/SideBar
-   без подтвержденного бага.
+1. Дождаться теста 0.4.12 на устройстве: отдельно проверить выключение,
+   перезагрузку и отсутствие влияния на плеер/CarWebGuru.
 2. Навести порядок в фоновых задачах: executor, отмена устаревших source-load
    и search/import операций.
 3. Переименовать настройки `sidebar_watchdog`/`sidebarWatchdogBox`, чтобы они

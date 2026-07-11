@@ -132,6 +132,10 @@
     <string name="dislike_track">Dislike</string>
     <string name="enable_embedded_sidebar">Enable built-in SideBar overlay</string>
     <string name="sidebar_auto_hide">Auto-hide SideBar after inactivity</string>
+    <string name="shutdown_confirm_title">Turn off the head unit?</string>
+    <string name="shutdown_confirm_message">Playback will stop and the TS18 head unit will shut down. Turn it on again with the hardware power button or ignition.</string>
+    <string name="shutdown_confirm_action">Turn off</string>
+    <string name="shutdown_request_sending">Turning off...</string>
     <string name="shutdown_menu_unavailable">Shutdown request is not available on this firmware without system privileges.</string>
     <string name="reboot_menu_unavailable">Reboot request is not available on this firmware without system privileges.</string>
     <string name="show_hide_sidebar">Show/hide SideBar</string>

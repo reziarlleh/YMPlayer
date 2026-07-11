@@ -203,16 +203,25 @@
 - Kept the 0.4.10 TS18 SideBar shutdown/reboot behavior unchanged for the next
   real-device test.
 
+## Completed In 0.4.12
+
+- Added an app-owned SideBar shutdown confirmation overlay.
+- Added the factory NWD `ACTION_SET_SYSTEM_PROP` bridge for
+  `sys.powerctl=shutdown,userrequested` after explicit confirmation.
+- Added guarded Android shutdown fallbacks and a typed NWD
+  `DOWN -> LONGPRESS -> UP` power-event sequence.
+- Kept the confirmed reboot button and playback implementation unchanged.
+
 ## Planned 0.4.x Features
 
-- Keep 0.4.x focused on stabilization while the user tests 0.4.11 on a real
+- Keep 0.4.x focused on stabilization while the user tests 0.4.12 on a real
   device.
 - Current audit and prioritized fix list: [PROJECT_AUDIT.md](PROJECT_AUDIT.md).
 - Next cleanup priority is reducing stale background UI updates with a shared
   executor and simple cancellation tokens for search/import/source-loading
   operations.
-- Confirm on device whether the new SideBar shutdown button opens the desired
-  SystemUI power-off request on TS18.
+- Confirm on device that the 0.4.12 SideBar shutdown path powers off the TS18
+  after the YMPlayer confirmation instead of only putting the display to sleep.
 - Improve local playlist management with optional folder diff details and
   better large-playlist editing ergonomics.
 - Add a favorite-artist action only when a stable Yandex Music endpoint is

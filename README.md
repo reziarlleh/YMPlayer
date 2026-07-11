@@ -13,11 +13,11 @@ YMPlayer - неофициальный плеер Яндекс Музыки дл�
 
 ## Скачать
 
-Текущая рабочая сборка: **0.4.11**, `versionCode 51`.
+Текущая рабочая сборка: **0.4.12**, `versionCode 52`.
 
-- GitHub Release: [YMPlayer 0.4.11](https://github.com/reziarlleh/YMPlayer/releases/tag/v0.4.11)
-- APK в репозитории: [releases/0.4.11/YMPlayer-v0.4.11-debug-b51.apk](releases/0.4.11/YMPlayer-v0.4.11-debug-b51.apk)
-- Прямая ссылка на APK из релиза: [YMPlayer-v0.4.11-debug-b51.apk](https://github.com/reziarlleh/YMPlayer/releases/download/v0.4.11/YMPlayer-v0.4.11-debug-b51.apk)
+- GitHub Release: [YMPlayer 0.4.12](https://github.com/reziarlleh/YMPlayer/releases/tag/v0.4.12)
+- APK в репозитории: [releases/0.4.12/YMPlayer-v0.4.12-debug-b52.apk](releases/0.4.12/YMPlayer-v0.4.12-debug-b52.apk)
+- Прямая ссылка на APK из релиза: [YMPlayer-v0.4.12-debug-b52.apk](https://github.com/reziarlleh/YMPlayer/releases/download/v0.4.12/YMPlayer-v0.4.12-debug-b52.apk)
 
 Путь `app/build/outputs/apk/debug/...` появляется только после локальной сборки
 через Gradle и не является файлом в GitHub-репозитории.
@@ -144,10 +144,13 @@ launcher-запросы `ACTION_REQUEST_START_ACTIVITY`, `ACTION_START_ACTIVITY`
 `ACTION_MCU_POWER_OFF` и старый путь `extra_key_value=0` не используются,
 потому что они могут выключать/усыплять устройство без нужного подтверждения.
 
-На TS18-магнитолах YMPlayer отправляет `com.nwd.action.ACTION_KEY_VALUE` только
-с `extra_key_value` либо `com.nwd.can.action.ACTION_PLATFORM_SEND_CAN_VOLUME`,
-если устройство использует CAN-громкость. На обычных Android-устройствах
-громкость управляется через стандартный `AudioManager`.
+Для громкости/mute на TS18 YMPlayer отправляет
+`com.nwd.action.ACTION_KEY_VALUE` только с `extra_key_value` либо
+`com.nwd.can.action.ACTION_PLATFORM_SEND_CAN_VOLUME`, если устройство
+использует CAN-громкость. Подтвержденное пользователем выключение отдельно
+использует vendor power API и типизированную последовательность длинного
+нажатия. На обычных Android-устройствах громкость управляется через стандартный
+`AudioManager`.
 
 ## Сборка из исходников
 
@@ -162,7 +165,7 @@ $env:Path = "$env:JAVA_HOME\bin;$env:Path"
 После локальной сборки APK будет лежать в:
 
 ```text
-app/build/outputs/apk/debug/YMPlayer-v0.4.11-debug-b51.apk
+app/build/outputs/apk/debug/YMPlayer-v0.4.12-debug-b52.apk
 ```
 
 Этот путь относится только к локальной машине разработчика. На GitHub готовые

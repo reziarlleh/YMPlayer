@@ -3,6 +3,26 @@
 This file tracks only working, testable versions. Broken or experimental
 intermediate builds should not be added here.
 
+## 0.4.12 - 2026-07-11
+
+TS18 shutdown confirmation and vendor power-off path.
+
+- Added a YMPlayer-owned confirmation overlay for the embedded SideBar power
+  button, so confirmation no longer depends on firmware allowing a third-party
+  app to open Android SystemUI GlobalActions.
+- Added the NWD privileged system-property bridge found in the factory TS18
+  libraries: after explicit confirmation YMPlayer mirrors the factory
+  `nwd_system_prop` record and requests
+  `sys.powerctl=shutdown,userrequested` through
+  `com.nwd.action.ACTION_SET_SYSTEM_PROP`.
+- Added guarded direct Android `PowerManager`/`SystemProperties` attempts for
+  firmware variants that expose them, plus a launcher-mediated shutdown
+  activity request.
+- Replaced the old single `extra_key_value=0` fallback with the factory NWD
+  power-event sequence `DOWN -> LONGPRESS -> UP` using `extra_key_type`.
+- Kept playback code and the already confirmed separate reboot button
+  unchanged.
+
 ## 0.4.11 - 2026-07-03
 
 Artwork stability after ACC/sleep resume.
