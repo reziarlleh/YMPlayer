@@ -74,7 +74,7 @@ public final class ClipWaveActivity extends Activity {
     private final Map<String, YandexMusicClient.Track> clipTracks = new ConcurrentHashMap<>();
     private final Set<String> likedTrackKeys = Collections.synchronizedSet(new HashSet<>());
     private final Set<String> seenClipIds = Collections.synchronizedSet(new HashSet<>());
-    private final Deque<ClipWaveClient.Clip> history = new ArrayDeque<>();
+    private final Deque<HistoryEntry> history = new ArrayDeque<>();
 
     private ExoPlayer player;
     private PlayerView playerView;
@@ -83,6 +83,8 @@ public final class ClipWaveActivity extends Activity {
     private YmpRepository repository;
     private String accessToken = "";
     private String sessionId = "";
+    private String currentClipSessionId = "";
+    private String nextClipSessionId = "";
     private ClipWaveClient.Clip currentClip;
     private ClipWaveClient.Clip nextClip;
     private YandexMusicClient.Track currentTrack;
@@ -466,8 +468,7 @@ public final class ClipWaveActivity extends Activity {
                 ClipWaveClient.Clip resolvedFirst = null;
                 ClipWaveClient.StreamInfo resolvedFirstStream = null;
                 Exception lastStreamError = null;
-                int initialProbeCount = Math.min(2, initial.size());
-                for (int i = 0; i < initialProbeCount; i++) {
+                for (int i = 0; i < initial.size(); i++) {
                     ClipWaveClient.Clip candidate = initial.get(i);
                     try {
                         resolvedFirstStream = clipClient.resolveStream(candidate);
@@ -486,24 +487,15 @@ public final class ClipWaveActivity extends Activity {
                 final ClipWaveClient.Clip first = resolvedFirst;
                 final ClipWaveClient.StreamInfo firstStream = resolvedFirstStream;
                 resolvedStreams.put(first.clipId, firstStream);
-                int firstIndex = initial.indexOf(first);
-                final ClipWaveClient.Clip second = firstIndex >= 0 && firstIndex + 1 < initial.size()
-                        ? initial.get(firstIndex + 1)
-                        : null;
 
                 postToMain(() -> {
                     sessionId = session.sessionId;
                     seenClipIds.add(first.clipId);
-                    if (second != null) {
-                        seenClipIds.add(second.clipId);
-                    }
-                    nextClip = second;
-                    playClip(first);
-                    if (second != null) {
-                        prefetchStream(second);
-                    } else {
-                        loadNextClip();
-                    }
+                    nextClip = null;
+                    nextClipSessionId = "";
+                    nextLoading = true;
+                    playClip(first, session.sessionId);
+                    prefetchInitialNext(initial, first, session.sessionId);
                 });
 
                 try {
@@ -523,12 +515,67 @@ public final class ClipWaveActivity extends Activity {
         });
     }
 
-    private void playClip(ClipWaveClient.Clip clip) {
+    private void prefetchInitialNext(
+            List<ClipWaveClient.Clip> initial,
+            ClipWaveClient.Clip anchor,
+            String sourceSessionId
+    ) {
+        networkExecutor.execute(() -> {
+            ResolvedClip resolved = null;
+            int startIndex = initial == null || anchor == null ? -1 : initial.indexOf(anchor);
+            if (initial != null) {
+                for (int i = Math.max(0, startIndex + 1); i < initial.size(); i++) {
+                    ClipWaveClient.Clip candidate = initial.get(i);
+                    if (candidate == null || candidate.clipId.equals(anchor.clipId) || isSeen(candidate.clipId)) {
+                        continue;
+                    }
+                    try {
+                        resolved = new ResolvedClip(candidate, clipClient.resolveStream(candidate));
+                        break;
+                    } catch (Exception ex) {
+                        Diagnostics.log(this, "YMP Clip Wave initial next unavailable: " + candidate.clipId, ex);
+                    }
+                }
+            }
+            ResolvedClip loaded = resolved;
+            postToMain(() -> {
+                if (currentClip == null
+                        || anchor == null
+                        || !anchor.clipId.equals(currentClip.clipId)
+                        || !sourceSessionId.equals(currentClipSessionId)
+                        || nextClip != null) {
+                    return;
+                }
+                nextLoading = false;
+                if (loaded == null) {
+                    loadNextClip();
+                    return;
+                }
+                nextClip = loaded.clip;
+                nextClipSessionId = sourceSessionId;
+                seenClipIds.add(loaded.clip.clipId);
+                resolvedStreams.put(loaded.clip.clipId, loaded.stream);
+                showStatus(getString(R.string.clip_wave_next_ready, loaded.clip.title));
+                updateControls();
+                if (advanceWhenReady) {
+                    boolean finished = advanceAsFinished;
+                    advanceWhenReady = false;
+                    advanceToNext(finished);
+                }
+            });
+        });
+    }
+
+    private void playClip(ClipWaveClient.Clip clip, String clipSessionId) {
         if (clip == null || destroyed) {
             return;
         }
         playbackGeneration++;
         int generation = playbackGeneration;
+        currentClipSessionId = clipSessionId == null ? "" : clipSessionId;
+        if (!currentClipSessionId.isEmpty()) {
+            sessionId = currentClipSessionId;
+        }
         currentClip = clip;
         currentTrack = clipTracks.get(clip.clipId);
         currentLiked = currentTrack != null && likedTrackKeys.contains(currentTrack.key);
@@ -612,14 +659,17 @@ public final class ClipWaveActivity extends Activity {
             return;
         }
         float playedSeconds = currentPlayedSeconds();
-        sendFinishedOrSkipped(old, finished, playedSeconds);
-        history.addLast(old);
+        String oldSessionId = currentClipSessionId;
+        String targetSessionId = nextClipSessionId.isEmpty() ? sessionId : nextClipSessionId;
+        sendFinishedOrSkipped(old, oldSessionId, finished, playedSeconds);
+        history.addLast(new HistoryEntry(old, oldSessionId));
         while (history.size() > 40) {
             history.removeFirst();
         }
         nextClip = null;
+        nextClipSessionId = "";
         advanceWhenReady = false;
-        playClip(target);
+        playClip(target, targetSessionId);
         loadNextClip();
     }
 
@@ -630,11 +680,13 @@ public final class ClipWaveActivity extends Activity {
             return;
         }
         ClipWaveClient.Clip old = currentClip;
-        sendFinishedOrSkipped(old, false, currentPlayedSeconds());
-        ClipWaveClient.Clip previous = history.removeLast();
+        String oldSessionId = currentClipSessionId;
+        sendFinishedOrSkipped(old, oldSessionId, false, currentPlayedSeconds());
+        HistoryEntry previous = history.removeLast();
         nextClip = old;
+        nextClipSessionId = oldSessionId;
         advanceWhenReady = false;
-        playClip(previous);
+        playClip(previous.clip, previous.sessionId);
         prefetchStream(old);
     }
 
@@ -644,7 +696,7 @@ public final class ClipWaveActivity extends Activity {
         }
         nextLoading = true;
         String anchorId = currentClip.clipId;
-        String sourceSessionId = sessionId;
+        String sourceSessionId = currentClipSessionId.isEmpty() ? sessionId : currentClipSessionId;
         showStatus(getString(R.string.clip_wave_next_loading));
         networkExecutor.execute(() -> {
             try {
@@ -654,10 +706,8 @@ public final class ClipWaveActivity extends Activity {
                     if (currentClip == null || !anchorId.equals(currentClip.clipId) || nextClip != null) {
                         return;
                     }
-                    if (!loaded.sessionId.equals(sessionId)) {
-                        sessionId = loaded.sessionId;
-                    }
                     nextClip = loaded.clip;
+                    nextClipSessionId = loaded.sessionId;
                     seenClipIds.add(loaded.clip.clipId);
                     resolvedStreams.put(loaded.clip.clipId, loaded.stream);
                     showStatus(getString(R.string.clip_wave_next_ready, loaded.clip.title));
@@ -685,24 +735,22 @@ public final class ClipWaveActivity extends Activity {
                 sourceSessionId,
                 Collections.singletonList(anchorId)
         );
-        ClipWaveClient.Clip candidate = firstCandidate(batch.clips, anchorId);
         String targetSessionId = sourceSessionId;
         boolean restarted = false;
-        if (candidate == null) {
+        List<ClipWaveClient.Clip> candidates = uniqueClips(batch.clips);
+        if (firstCandidate(candidates, anchorId) == null) {
             ClipWaveClient.ClipSession newSession = clipClient.startSession();
             targetSessionId = newSession.sessionId;
-            candidate = firstCandidate(newSession.clips, anchorId);
+            candidates = uniqueClips(newSession.clips);
             restarted = true;
         }
+        ClipWaveClient.Clip candidate = firstCandidate(candidates, anchorId);
         if (candidate == null) {
             throw new IllegalStateException("Clip Wave returned no next clip");
         }
 
         ClipWaveClient.StreamInfo stream = null;
         Exception lastError = null;
-        List<ClipWaveClient.Clip> candidates = restarted
-                ? Collections.singletonList(candidate)
-                : uniqueClips(batch.clips);
         for (ClipWaveClient.Clip clip : candidates) {
             if (clip == null || anchorId.equals(clip.clipId) || isSeen(clip.clipId)) {
                 continue;
@@ -854,7 +902,7 @@ public final class ClipWaveActivity extends Activity {
 
     private void sendStartedFeedbackOnce() {
         ClipWaveClient.Clip clip = currentClip;
-        String sourceSessionId = sessionId;
+        String sourceSessionId = currentClipSessionId;
         if (clip == null || sourceSessionId.isEmpty() || clip.clipId.equals(startedFeedbackClipId)) {
             return;
         }
@@ -868,8 +916,12 @@ public final class ClipWaveActivity extends Activity {
         });
     }
 
-    private void sendFinishedOrSkipped(ClipWaveClient.Clip clip, boolean finished, float seconds) {
-        String sourceSessionId = sessionId;
+    private void sendFinishedOrSkipped(
+            ClipWaveClient.Clip clip,
+            String sourceSessionId,
+            boolean finished,
+            float seconds
+    ) {
         if (clip == null || sourceSessionId.isEmpty() || destroyed) {
             return;
         }
@@ -1260,6 +1312,26 @@ public final class ClipWaveActivity extends Activity {
             this.sessionId = sessionId;
             this.clip = clip;
             this.stream = stream;
+        }
+    }
+
+    private static final class ResolvedClip {
+        final ClipWaveClient.Clip clip;
+        final ClipWaveClient.StreamInfo stream;
+
+        ResolvedClip(ClipWaveClient.Clip clip, ClipWaveClient.StreamInfo stream) {
+            this.clip = clip;
+            this.stream = stream;
+        }
+    }
+
+    private static final class HistoryEntry {
+        final ClipWaveClient.Clip clip;
+        final String sessionId;
+
+        HistoryEntry(ClipWaveClient.Clip clip, String sessionId) {
+            this.clip = clip;
+            this.sessionId = sessionId == null ? "" : sessionId;
         }
     }
 }

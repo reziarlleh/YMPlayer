@@ -2636,7 +2636,10 @@ public class MainActivity extends Activity {
     private void loadCover(String coverUrl, String trackKey) {
         String url = coverUrl == null ? "" : coverUrl.trim();
         String localKey = trackKey == null ? "" : trackKey.trim();
-        String identity = url.isEmpty() && LocalPlaylistStore.isLocalTrackKey(localKey) ? localKey : url;
+        boolean localTrack = LocalPlaylistStore.isLocalTrackKey(localKey);
+        String identity = localTrack
+                ? localKey
+                : localKey.isEmpty() && url.isEmpty() ? "" : localKey + "|" + url;
         if (coverView == null) {
             return;
         }
@@ -2655,18 +2658,14 @@ public class MainActivity extends Activity {
             latestCoverLoading = false;
             return;
         }
-        if (url.isEmpty()) {
-            if (LocalPlaylistStore.isLocalTrackKey(localKey)) {
-                loadLocalCover(localKey, identity);
-            } else {
-                latestCoverLoading = false;
-            }
+        if (localTrack) {
+            loadLocalCover(localKey, identity);
             return;
         }
         Context appContext = getApplicationContext();
         new Thread(() -> {
             try {
-                Bitmap bitmap = YmpArtworkCache.loadRemoteBitmap(appContext, url);
+                Bitmap bitmap = YmpArtworkCache.loadYandexTrackBitmap(appContext, localKey, url);
                 if (bitmap != null && identity.equals(latestCoverUrl)) {
                     runOnUiThread(() -> {
                         if (identity.equals(latestCoverUrl)) {
@@ -2674,6 +2673,13 @@ public class MainActivity extends Activity {
                             latestCoverLoaded = true;
                             latestCoverLoading = false;
                             latestCoverRetryCount = 0;
+                        }
+                    });
+                } else if (identity.equals(latestCoverUrl)) {
+                    runOnUiThread(() -> {
+                        if (identity.equals(latestCoverUrl)) {
+                            coverView.setImageResource(R.mipmap.ic_launcher);
+                            latestCoverLoaded = false;
                         }
                     });
                 }

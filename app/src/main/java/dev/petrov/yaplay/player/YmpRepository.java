@@ -346,34 +346,61 @@ public final class YmpRepository {
         int downloaded = 0;
         int skipped = 0;
         int failed = 0;
+        int coversDownloaded = 0;
+        int coverFailures = 0;
         int index = 1;
         for (YandexMusicClient.Track track : unique.values()) {
             if (isCancelled(progress)) {
-                CacheSyncResult result = new CacheSyncResult(unique.size(), downloaded, skipped, failed, removed, true);
+                CacheSyncResult result = new CacheSyncResult(
+                        unique.size(),
+                        downloaded,
+                        skipped,
+                        failed,
+                        removed,
+                        coversDownloaded,
+                        coverFailures,
+                        true
+                );
                 Diagnostics.log(context, result.summaryText());
                 return result;
             }
-            if (audioCache.hasLikedTrack(track.key)) {
-                skipped++;
-                notifyProgress(progress, "Cached " + index + "/" + unique.size() + " already: "
-                        + track.artist + " - " + track.title);
-            } else {
-                notifyProgress(progress, "Downloading " + index + "/" + unique.size() + ": "
-                        + track.artist + " - " + track.title);
-                try {
-                    audioCache.cacheLiked(client, track);
+            boolean alreadyCached = audioCache.hasLikedTrack(track.key);
+            notifyProgress(progress, (alreadyCached ? "Checking " : "Downloading ")
+                    + index + "/" + unique.size() + ": "
+                    + track.artist + " - " + track.title);
+            try {
+                YandexTrackCache.ArtworkSyncResult artwork = audioCache.cacheLiked(client, track);
+                if (alreadyCached) {
+                    skipped++;
+                } else {
                     downloaded++;
-                } catch (Exception ex) {
-                    failed++;
-                    Diagnostics.log(context, "YMP unable to cache liked track " + track.key, ex);
-                    notifyProgress(progress, "Failed " + index + "/" + unique.size() + ": "
-                            + track.title + " (" + ex.getMessage() + ")");
                 }
+                if (artwork == YandexTrackCache.ArtworkSyncResult.DOWNLOADED) {
+                    coversDownloaded++;
+                    notifyProgress(progress, "Artwork restored " + index + "/" + unique.size() + ": "
+                            + track.artist + " - " + track.title);
+                } else if (artwork == YandexTrackCache.ArtworkSyncResult.FAILED) {
+                    coverFailures++;
+                }
+            } catch (Exception ex) {
+                failed++;
+                Diagnostics.log(context, "YMP unable to cache liked track " + track.key, ex);
+                notifyProgress(progress, "Failed " + index + "/" + unique.size() + ": "
+                        + track.title + " (" + ex.getMessage() + ")");
             }
             index++;
         }
 
-        CacheSyncResult result = new CacheSyncResult(unique.size(), downloaded, skipped, failed, removed, false);
+        CacheSyncResult result = new CacheSyncResult(
+                unique.size(),
+                downloaded,
+                skipped,
+                failed,
+                removed,
+                coversDownloaded,
+                coverFailures,
+                false
+        );
         Diagnostics.log(context, result.summaryText());
         return result;
     }
@@ -434,7 +461,9 @@ public final class YmpRepository {
     public synchronized String cacheStatusText() {
         YandexTrackCache.Summary liked = audioCache.likedSummary();
         YandexTrackCache.Summary playback = audioCache.playbackSummary();
-        return "Liked cache: " + liked.count + " tracks, " + formatBytes(liked.bytes)
+        return "Liked cache: " + liked.count + " tracks, "
+                + formatBytes(liked.bytes + liked.coverBytes)
+                + " (covers " + formatBytes(liked.coverBytes) + ")"
                 + "\nPlayback cache: " + playback.count + " tracks, " + formatBytes(playback.bytes)
                 + " / " + formatBytes(YandexTrackCache.PLAYBACK_CACHE_LIMIT_BYTES);
     }
@@ -444,11 +473,12 @@ public final class YmpRepository {
         File covers = new File(context.getCacheDir(), "covers");
         long coverBytes = directoryBytes(covers);
         deleteRecursively(covers);
-        if (removed.count == 0 && coverBytes == 0L) {
+        if (removed.count == 0 && removed.coverBytes == 0L && coverBytes == 0L) {
             return "Local cache was already empty";
         }
         return "Local cache cleared: removed " + removed.count + " tracks, "
-                + formatBytes(removed.bytes) + " audio, " + formatBytes(coverBytes) + " covers";
+                + formatBytes(removed.bytes) + " audio, "
+                + formatBytes(removed.coverBytes + coverBytes) + " covers";
     }
 
     private YandexMusicClient client() {
@@ -613,14 +643,27 @@ public final class YmpRepository {
         public final int skipped;
         public final int failed;
         public final int removed;
+        public final int coversDownloaded;
+        public final int coverFailures;
         public final boolean cancelled;
 
-        CacheSyncResult(int total, int downloaded, int skipped, int failed, int removed, boolean cancelled) {
+        CacheSyncResult(
+                int total,
+                int downloaded,
+                int skipped,
+                int failed,
+                int removed,
+                int coversDownloaded,
+                int coverFailures,
+                boolean cancelled
+        ) {
             this.total = total;
             this.downloaded = downloaded;
             this.skipped = skipped;
             this.failed = failed;
             this.removed = removed;
+            this.coversDownloaded = coversDownloaded;
+            this.coverFailures = coverFailures;
             this.cancelled = cancelled;
         }
 
@@ -629,6 +672,8 @@ public final class YmpRepository {
             return status + ": favorites " + total
                     + ", downloaded " + downloaded
                     + ", already cached " + skipped
+                    + ", covers restored " + coversDownloaded
+                    + ", cover failures " + coverFailures
                     + ", removed non-favorites " + removed
                     + ", failed " + failed;
         }

@@ -13,6 +13,8 @@ import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 
+import dev.petrov.yaplay.cache.YandexTrackCache;
+
 public final class YmpArtworkCache {
     private static final int MAX_DECODE_SIZE = 768;
     private static final int MAX_REMOTE_BYTES = 8 * 1024 * 1024;
@@ -22,7 +24,7 @@ public final class YmpArtworkCache {
 
     public static Bitmap loadRemoteBitmap(Context context, String coverUrl) throws Exception {
         String url = coverUrl == null ? "" : coverUrl.trim();
-        if (url.isEmpty()) {
+        if (!url.startsWith("https://") && !url.startsWith("http://")) {
             return null;
         }
 
@@ -38,6 +40,21 @@ public final class YmpArtworkCache {
             writeCoverCache(cached, bytes);
         }
         return bitmap;
+    }
+
+    public static Bitmap loadYandexTrackBitmap(
+            Context context,
+            String trackKey,
+            String coverUrl
+    ) throws Exception {
+        String key = trackKey == null ? "" : trackKey.trim();
+        if (!key.isEmpty()) {
+            Bitmap permanent = decodeCachedFile(YandexTrackCache.likedArtworkFile(context, key));
+            if (permanent != null) {
+                return permanent;
+            }
+        }
+        return loadRemoteBitmap(context, coverUrl);
     }
 
     public static Bitmap loadLocalEmbeddedBitmap(Context context, String localTrackKey) {

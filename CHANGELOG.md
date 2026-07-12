@@ -3,6 +3,33 @@
 This file tracks only working, testable versions. Broken or experimental
 intermediate builds should not be added here.
 
+## 0.5.2 - 2026-07-12
+
+Clip Wave pre-test hardening and permanent liked-track artwork.
+
+- Matched the Clip Wave start payload to the provided Kinopoisk Android TV
+  client and removed two fields that its production rotor request leaves unset.
+- Probe the complete initial clip response until the first playable stream is
+  found instead of failing when only the first two clips are unavailable.
+- Promote an item to the one-slot next queue only after its VH stream has been
+  resolved successfully; unavailable initial items no longer delay the next
+  transition.
+- Preserve the rotor session that owns each current, next, and history item so
+  start/finish/skip feedback remains attached to the right session after an
+  automatic rotor restart.
+- Added permanent real-cover sidecars beside liked-track audio. They survive
+  Android's normal temporary-cache cleanup and are preferred by the main
+  player, notification, and MediaSession during offline playback.
+- Favorite synchronization now revisits already downloaded tracks, refreshes
+  their metadata, validates existing artwork, and downloads missing real
+  covers without redownloading valid audio.
+- Kept cached audio bytes untouched. The YMPlayer logo is never embedded or
+  persisted as track artwork; it remains only a UI/MediaSession fallback when
+  no real cover is available.
+- Removing a like, disliking a track, pruning favorites, or clearing local
+  cache now removes the corresponding permanent cover as well.
+- Updated the build to `YMPlayer-v0.5.2-debug-b62.apk` with `minSdk 29` kept.
+
 ## 0.5.1 - 2026-07-12
 
 Final SideBar power-button simplification.

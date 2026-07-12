@@ -240,6 +240,21 @@
   should be limited to regressions in its established sleep, reboot, volume,
   mute, home, back, edge-swipe, and auto-hide behavior.
 
+## Completed In 0.5.2
+
+- Matched Clip Wave session startup more closely to the production Kinopoisk
+  Android TV request recovered from the supplied APK.
+- Made startup search the complete initial response for a playable clip and
+  only expose a next item after its stream has been resolved successfully.
+- Kept feedback tied to the owning clip-rotor session across automatic session
+  restarts and local previous/next history.
+- Added permanent real-artwork sidecars for the liked-track cache without
+  modifying downloaded audio files.
+- Made favorite synchronization validate and restore missing artwork for
+  tracks whose audio is already cached.
+- Kept the YMPlayer logo strictly as a display fallback; it is never persisted
+  as track artwork.
+
 ## Planned 0.5.x Features
 
 - Keep the established audio player and SideBar behavior stable while 0.5.x is

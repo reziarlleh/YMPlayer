@@ -40,8 +40,6 @@ public final class ClipWaveClient {
         JSONObject body = new JSONObject();
         body.put("supportedTypes", new JSONArray().put("clip"));
         body.put("queue", new JSONArray());
-        body.put("child", false);
-        body.put("allowExplicit", true);
 
         JSONObject result = unwrap(requestJson(
                 "POST",

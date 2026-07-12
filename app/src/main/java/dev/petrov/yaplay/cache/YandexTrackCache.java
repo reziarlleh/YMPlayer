@@ -1,6 +1,7 @@
 package dev.petrov.yaplay.cache;
 
 import android.content.Context;
+import android.graphics.BitmapFactory;
 import android.os.ParcelFileDescriptor;
 
 import org.json.JSONException;
@@ -30,9 +31,11 @@ import java.util.Set;
 public final class YandexTrackCache {
     public static final long PLAYBACK_CACHE_LIMIT_BYTES = 256L * 1024L * 1024L;
     private static final int PROBE_BYTES = 64;
+    private static final int MAX_COVER_BYTES = 8 * 1024 * 1024;
 
     private static final String AUDIO_EXT = ".mp3";
     private static final String META_EXT = ".json";
+    private static final String COVER_EXT = ".cover";
 
     private final Context context;
     private final File likedRoot;
@@ -63,8 +66,20 @@ public final class YandexTrackCache {
         return ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY);
     }
 
-    public synchronized void cacheLiked(YandexMusicClient client, YandexMusicClient.Track track) throws IOException {
+    public synchronized ArtworkSyncResult cacheLiked(
+            YandexMusicClient client,
+            YandexMusicClient.Track track
+    ) throws IOException {
         ensureCached(likedRoot, client, track, AudioQuality.from(YmpSettings.cacheQuality(context)));
+        return syncLikedArtwork(client, track);
+    }
+
+    public static File likedArtworkFile(Context context, String trackKey) {
+        Context appContext = context.getApplicationContext();
+        return new File(
+                new File(appContext.getFilesDir(), "liked-track-cache"),
+                cacheId(trackKey == null ? "" : trackKey) + COVER_EXT
+        );
     }
 
     public synchronized ParcelFileDescriptor openPlayback(YandexMusicClient client, YandexMusicClient.Track track) throws IOException {
@@ -118,6 +133,10 @@ public final class YandexTrackCache {
                     if (meta.exists()) {
                         meta.delete();
                     }
+                    File cover = new File(likedRoot, id + COVER_EXT);
+                    if (cover.exists()) {
+                        cover.delete();
+                    }
                 }
             }
         }
@@ -129,6 +148,16 @@ public final class YandexTrackCache {
                 File audio = new File(likedRoot, id + AUDIO_EXT);
                 if (!audio.exists()) {
                     meta.delete();
+                }
+            }
+        }
+        File[] coverFiles = likedRoot.listFiles((dir, name) -> name.endsWith(COVER_EXT));
+        if (coverFiles != null) {
+            for (File cover : coverFiles) {
+                String id = stripExtension(cover.getName(), COVER_EXT);
+                File audio = new File(likedRoot, id + AUDIO_EXT);
+                if (!audio.exists()) {
+                    cover.delete();
                 }
             }
         }
@@ -163,7 +192,11 @@ public final class YandexTrackCache {
         Summary playback = summary(playbackRoot);
         deleteRecursively(likedRoot);
         deleteRecursively(playbackRoot);
-        return new Summary(liked.count + playback.count, liked.bytes + playback.bytes);
+        return new Summary(
+                liked.count + playback.count,
+                liked.bytes + playback.bytes,
+                liked.coverBytes + playback.coverBytes
+        );
     }
 
     private File ensureCached(File root, YandexMusicClient client, YandexMusicClient.Track track, AudioQuality quality) throws IOException {
@@ -291,6 +324,7 @@ public final class YandexTrackCache {
     private Summary summary(File root) {
         int count = 0;
         long bytes = 0L;
+        long coverBytes = 0L;
         if (root.exists()) {
             File[] files = root.listFiles((dir, name) -> name.endsWith(AUDIO_EXT));
             if (files != null) {
@@ -306,8 +340,16 @@ public final class YandexTrackCache {
                     }
                 }
             }
+            File[] covers = root.listFiles((dir, name) -> name.endsWith(COVER_EXT));
+            if (covers != null) {
+                for (File cover : covers) {
+                    if (cover.length() > 0L) {
+                        coverBytes += cover.length();
+                    }
+                }
+            }
         }
-        return new Summary(count, bytes);
+        return new Summary(count, bytes, coverBytes);
     }
 
     private List<File> audioFilesSortedByOldest(File root) {
@@ -350,6 +392,90 @@ public final class YandexTrackCache {
         File meta = metadataFile(root, trackKey);
         if (meta.exists() && !meta.delete()) {
             meta.deleteOnExit();
+        }
+        File cover = artworkFile(root, trackKey);
+        if (cover.exists() && !cover.delete()) {
+            cover.deleteOnExit();
+        }
+    }
+
+    private ArtworkSyncResult syncLikedArtwork(
+            YandexMusicClient client,
+            YandexMusicClient.Track track
+    ) {
+        if (track == null || track.key == null || track.key.trim().isEmpty()) {
+            return ArtworkSyncResult.NO_SOURCE;
+        }
+        File cover = artworkFile(likedRoot, track.key);
+        if (isValidArtwork(cover)) {
+            return ArtworkSyncResult.PRESENT;
+        }
+        if (cover.exists() && !cover.delete()) {
+            Diagnostics.log(context, "YMP unable to remove invalid liked artwork: " + cover.getName());
+        }
+
+        String coverUrl = track.coverUrl == null ? "" : track.coverUrl.trim();
+        if (!coverUrl.startsWith("https://") && !coverUrl.startsWith("http://")) {
+            return ArtworkSyncResult.NO_SOURCE;
+        }
+        try {
+            byte[] bytes = client.downloadBytes(coverUrl);
+            if (!isValidArtwork(bytes)) {
+                Diagnostics.log(context, "YMP liked artwork is not a valid image for " + track.key
+                        + ": bytes=" + bytes.length);
+                return ArtworkSyncResult.FAILED;
+            }
+            writeArtworkAtomically(cover, bytes);
+            Diagnostics.log(context, "YMP liked artwork cached: " + track.key
+                    + ", bytes=" + bytes.length);
+            return ArtworkSyncResult.DOWNLOADED;
+        } catch (Exception ex) {
+            Diagnostics.log(context, "YMP unable to cache liked artwork " + track.key, ex);
+            return ArtworkSyncResult.FAILED;
+        }
+    }
+
+    private static File artworkFile(File root, String trackKey) {
+        return new File(root, cacheId(trackKey) + COVER_EXT);
+    }
+
+    private static boolean isValidArtwork(File file) {
+        if (file == null || !file.exists() || file.length() <= 0L || file.length() > MAX_COVER_BYTES) {
+            return false;
+        }
+        BitmapFactory.Options bounds = new BitmapFactory.Options();
+        bounds.inJustDecodeBounds = true;
+        BitmapFactory.decodeFile(file.getAbsolutePath(), bounds);
+        return bounds.outWidth > 0 && bounds.outHeight > 0;
+    }
+
+    private static boolean isValidArtwork(byte[] bytes) {
+        if (bytes == null || bytes.length == 0 || bytes.length > MAX_COVER_BYTES) {
+            return false;
+        }
+        BitmapFactory.Options bounds = new BitmapFactory.Options();
+        bounds.inJustDecodeBounds = true;
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.length, bounds);
+        return bounds.outWidth > 0 && bounds.outHeight > 0;
+    }
+
+    private static void writeArtworkAtomically(File target, byte[] bytes) throws IOException {
+        File parent = target.getParentFile();
+        if (parent != null && !parent.exists() && !parent.mkdirs()) {
+            throw new IOException("Unable to create liked artwork cache");
+        }
+        File temp = new File(parent, target.getName() + "." + System.nanoTime() + ".tmp");
+        try {
+            try (FileOutputStream output = new FileOutputStream(temp)) {
+                output.write(bytes);
+            }
+            if (!temp.renameTo(target)) {
+                copyFile(temp, target);
+            }
+        } finally {
+            if (temp.exists() && !temp.delete()) {
+                temp.deleteOnExit();
+            }
         }
     }
 
@@ -523,10 +649,19 @@ public final class YandexTrackCache {
     public static final class Summary {
         public final int count;
         public final long bytes;
+        public final long coverBytes;
 
-        public Summary(int count, long bytes) {
+        public Summary(int count, long bytes, long coverBytes) {
             this.count = count;
             this.bytes = bytes;
+            this.coverBytes = coverBytes;
         }
+    }
+
+    public enum ArtworkSyncResult {
+        PRESENT,
+        DOWNLOADED,
+        NO_SOURCE,
+        FAILED
     }
 }

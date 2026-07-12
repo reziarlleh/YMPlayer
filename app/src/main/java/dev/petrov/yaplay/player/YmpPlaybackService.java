@@ -1288,17 +1288,21 @@ public class YmpPlaybackService extends MediaBrowserService {
             mediaSession.setMetadata(metadata.build());
         } else {
             ensureMetadataCover(track);
-            String artworkUri = track.coverUrl == null || track.coverUrl.trim().isEmpty()
+            Bitmap realCover = metadataCoverFor(artworkKeyFor(track));
+            String remoteArtworkUri = track.coverUrl == null ? "" : track.coverUrl.trim();
+            String artworkUri = remoteArtworkUri.isEmpty() && realCover == null
                     ? defaultArtworkUri()
-                    : track.coverUrl;
+                    : remoteArtworkUri;
             MediaMetadata.Builder metadata = new MediaMetadata.Builder()
                     .putString(MediaMetadata.METADATA_KEY_TITLE, track.title)
                     .putString(MediaMetadata.METADATA_KEY_ARTIST, track.artist)
                     .putString(MediaMetadata.METADATA_KEY_ALBUM, track.album)
-                    .putString(MediaMetadata.METADATA_KEY_ALBUM_ART_URI, artworkUri)
-                    .putString(MediaMetadata.METADATA_KEY_ART_URI, artworkUri)
                     .putLong(MediaMetadata.METADATA_KEY_DURATION, track.durationMs);
-            putArtwork(metadata, metadataCoverForTrack(track));
+            if (!artworkUri.isEmpty()) {
+                metadata.putString(MediaMetadata.METADATA_KEY_ALBUM_ART_URI, artworkUri);
+                metadata.putString(MediaMetadata.METADATA_KEY_ART_URI, artworkUri);
+            }
+            putArtwork(metadata, realCover);
             mediaSession.setMetadata(metadata.build());
         }
         mediaSession.setActive(true);
@@ -1319,7 +1323,9 @@ public class YmpPlaybackService extends MediaBrowserService {
         if (LocalPlaylistStore.isLocalTrackKey(track.key)) {
             return track.key;
         }
-        return track.coverUrl == null ? "" : track.coverUrl;
+        String trackKey = track.key == null ? "" : track.key.trim();
+        String coverUrl = track.coverUrl == null ? "" : track.coverUrl.trim();
+        return trackKey.isEmpty() && coverUrl.isEmpty() ? "" : trackKey + "|" + coverUrl;
     }
 
     private Bitmap metadataCoverFor(String coverUrl) {
@@ -1369,7 +1375,7 @@ public class YmpPlaybackService extends MediaBrowserService {
             try {
                 bitmap = LocalPlaylistStore.isLocalTrackKey(track.key)
                         ? YmpArtworkCache.loadLocalEmbeddedBitmap(this, track.key)
-                        : YmpArtworkCache.loadRemoteBitmap(this, key);
+                        : YmpArtworkCache.loadYandexTrackBitmap(this, track.key, track.coverUrl);
             } catch (Exception ex) {
                 Diagnostics.log(this, "YMP metadata cover load failed", ex);
             }
