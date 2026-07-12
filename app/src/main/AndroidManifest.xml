@@ -48,6 +48,13 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".ClipWaveActivity"
+            android:configChanges="keyboardHidden|orientation|screenSize"
+            android:exported="false"
+            android:label="@string/clip_wave_title"
+            android:launchMode="singleTop" />
+
         <service
             android:name=".CacheSyncService"
             android:exported="false"

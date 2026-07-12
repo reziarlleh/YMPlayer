@@ -3,6 +3,38 @@
 This file tracks only working, testable versions. Broken or experimental
 intermediate builds should not be added here.
 
+## 0.5.0 - 2026-07-12
+
+First testable Clip Wave release.
+
+- Reverse-engineered the provided Kinopoisk Android TV client and implemented
+  its dedicated Yandex Music video rotor:
+  `rotor/combined/session/new`, one-item continuation requests, and clip
+  playback feedback.
+- Added a separate full-screen `Clip Wave` player based on AndroidX Media3,
+  with adaptive HLS/DASH playback and a clip preview fallback when a full
+  unprotected stream is unavailable.
+- Added a modern auto-hiding video overlay with artist/title, previous clip,
+  play/pause, next clip, like, and close controls for phone and landscape car
+  screens.
+- Kept only the current and one next clip locally. The next VH manifest is
+  resolved in the background, and an empty rotor continuation restarts the
+  dynamic clip session instead of ending the list.
+- Connected clip likes to the first linked Yandex Music track. A like updates
+  the account's global `Liked` collection and uses the existing automatic
+  permanent-cache setting; removing it also removes that track from the liked
+  cache.
+- Added a dedicated platform MediaSession for full-screen clip playback, with
+  clip metadata/artwork and previous/next/play/pause controls for system and
+  car surfaces.
+- Kept the established audio player, My Wave, cache, playlists, artwork, and
+  SideBar implementations unchanged apart from stopping audio when Clip Wave
+  opens.
+- Preserved Android 10 compatibility (`minSdk 29`) and changed the build output
+  to `YMPlayer-v0.5.0-debug-b60.apk`.
+- YMPlayer does not bypass video DRM. If Yandex exposes only DRM-protected
+  streams and no preview for a clip, the player skips it and requests another.
+
 ## 0.4.12 - 2026-07-11
 
 TS18 shutdown confirmation and vendor power-off path.

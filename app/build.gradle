@@ -10,8 +10,8 @@ android {
         applicationId "dev.petrov.yaplay"
         minSdk 29
         targetSdk 35
-        versionCode 52
-        versionName "0.4.12"
+        versionCode 60
+        versionName "0.5.0"
     }
 
     compileOptions {
@@ -27,5 +27,12 @@ android {
 }
 
 dependencies {
+    def media3Version = "1.5.1"
+
+    compileOnly "androidx.annotation:annotation:1.6.0"
+    implementation "androidx.media3:media3-exoplayer:${media3Version}"
+    implementation "androidx.media3:media3-exoplayer-dash:${media3Version}"
+    implementation "androidx.media3:media3-exoplayer-hls:${media3Version}"
+    implementation "androidx.media3:media3-ui:${media3Version}"
     implementation "net.jthink:jaudiotagger:3.0.1"
 }

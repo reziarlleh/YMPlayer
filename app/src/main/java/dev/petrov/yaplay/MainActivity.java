@@ -95,6 +95,7 @@ public class MainActivity extends Activity {
     private Button waveSourceButton;
     private Button offlineSourceButton;
     private Button playlistSourceButton;
+    private Button clipWaveButton;
     private ImageButton playPauseButton;
     private ImageButton queueModeButton;
     private ImageButton equalizerButton;
@@ -1905,6 +1906,19 @@ public class MainActivity extends Activity {
         playlistSourceButton.setOnClickListener(v -> showPlaylistSelector());
         sources.addView(playlistSourceButton, rowButtonParams(1.2f));
 
+        clipWaveButton = pillButton(getString(R.string.clip_wave_title), 0xffd94768, COLOR_TEXT);
+        clipWaveButton.setCompoundDrawablesWithIntrinsicBounds(R.drawable.ic_player_clips, 0, 0, 0);
+        clipWaveButton.setCompoundDrawablePadding(dp(8));
+        clipWaveButton.setContentDescription(getString(R.string.clip_wave_open));
+        clipWaveButton.setOnClickListener(v -> openClipWave());
+        if (wide) {
+            sources.addView(clipWaveButton, rowButtonParams(1.15f));
+        } else {
+            LinearLayout.LayoutParams clipParams = matchWrap();
+            clipParams.setMargins(0, dp(8), 0, 0);
+            info.addView(clipWaveButton, clipParams);
+        }
+
         modeView = new TextView(this);
         modeView.setText(R.string.source_my_wave);
         modeView.setTextColor(COLOR_ACCENT);
@@ -1999,6 +2013,10 @@ public class MainActivity extends Activity {
             tools.addView(equalizerButton, compactButtonParams(sideSize + dp(8)));
         }
         updateTransportVisuals();
+    }
+
+    private void openClipWave() {
+        startActivity(new Intent(this, ClipWaveActivity.class));
     }
 
     private void showSettingsDialog() {

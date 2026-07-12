@@ -212,6 +212,22 @@
   `DOWN -> LONGPRESS -> UP` power-event sequence.
 - Kept the confirmed reboot button and playback implementation unchanged.
 
+## Completed In 0.5.0
+
+- Investigated the provided Kinopoisk Android TV APK and recovered the separate
+  video-clip rotor plus Yandex VH player-manifest contract.
+- Added a full-screen Media3 Clip Wave player with adaptive HLS/DASH playback,
+  preview fallback, artist/title overlay, previous/next, play/pause, and like.
+- Limited the local dynamic video queue to current plus one next clip and
+  restart the clip rotor if a continuation is empty.
+- Connected a clip like to its linked Yandex Music track and the existing
+  liked-track auto-cache policy.
+- Added a platform MediaSession for clip metadata and car/system transport
+  controls while the full-screen video player is open.
+- Kept DRM-protected video unsupported by design; 0.5.0 needs real-device
+  validation for regional/account availability and the exact stream variants
+  returned to the user's subscription.
+
 ## Planned 0.4.x Features
 
 - Keep 0.4.x focused on stabilization while the user tests 0.4.12 on a real
@@ -232,6 +248,8 @@
 - My Wave mood/activity filters.
 - My Wave seeded by track or artist.
 - Favorite artist add/remove endpoints.
+- Clip Wave DRM incidence, regional availability, and whether all returned
+  `trackIds` consistently identify the audio track that should receive a like.
 
 These features depend on unofficial Yandex Music API behavior and must be
 validated on a real account before they are treated as stable.
