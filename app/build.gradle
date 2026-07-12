@@ -10,8 +10,18 @@ android {
         applicationId "dev.petrov.yaplay"
         minSdk 29
         targetSdk 35
-        versionCode 62
-        versionName "0.5.2"
+        versionCode 100
+        versionName "1.0.0-beta"
+    }
+
+    buildTypes {
+        release {
+            // Preserve in-place updates from the private 0.x test builds.
+            signingConfig signingConfigs.debug
+            debuggable false
+            minifyEnabled false
+            shrinkResources false
+        }
     }
 
     compileOptions {

@@ -1,6 +1,12 @@
 package dev.petrov.yaplay;
 
+import android.content.ContentResolver;
+import android.content.ContentValues;
 import android.content.Context;
+import android.net.Uri;
+import android.os.Build;
+import android.os.Environment;
+import android.provider.MediaStore;
 import android.util.Log;
 
 import java.io.BufferedInputStream;
@@ -9,6 +15,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
 import java.util.Date;
@@ -73,6 +80,49 @@ public final class Diagnostics {
         log(context, "Diagnostics cleared");
     }
 
+    public static synchronized ExportResult exportToDownloads(Context context) throws IOException {
+        if (context == null) {
+            throw new IOException("No app context");
+        }
+        String dateStamp = new SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(new Date());
+        String displayName = "YMPlayer-diagnostics-" + dateStamp + ".txt";
+        ContentValues values = new ContentValues();
+        values.put(MediaStore.MediaColumns.DISPLAY_NAME, displayName);
+        values.put(MediaStore.MediaColumns.MIME_TYPE, "text/plain");
+        values.put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS);
+        values.put(MediaStore.MediaColumns.IS_PENDING, 1);
+
+        ContentResolver resolver = context.getContentResolver();
+        Uri uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values);
+        if (uri == null) {
+            throw new IOException("Downloads storage is unavailable");
+        }
+        try {
+            String header = "YMPlayer " + versionName(context) + "\n"
+                    + "Exported: " + timestamp() + "\n"
+                    + "Device: " + Build.MANUFACTURER + " " + Build.MODEL
+                    + ", Android " + Build.VERSION.RELEASE + " (API " + Build.VERSION.SDK_INT + ")\n\n";
+            try (OutputStream out = resolver.openOutputStream(uri, "w")) {
+                if (out == null) {
+                    throw new IOException("Unable to open the Downloads file");
+                }
+                out.write(header.getBytes(StandardCharsets.UTF_8));
+                out.write(snapshot(context).getBytes(StandardCharsets.UTF_8));
+            }
+            ContentValues ready = new ContentValues();
+            ready.put(MediaStore.MediaColumns.IS_PENDING, 0);
+            resolver.update(uri, ready, null, null);
+            log(context, "Diagnostics exported to Downloads: " + displayName);
+            return new ExportResult(displayName, uri);
+        } catch (Exception ex) {
+            resolver.delete(uri, null, null);
+            if (ex instanceof IOException) {
+                throw (IOException) ex;
+            }
+            throw new IOException(ex.getMessage(), ex);
+        }
+    }
+
     private static File logFile(Context context) {
         return new File(context.getFilesDir(), FILE_NAME);
     }
@@ -112,10 +162,32 @@ public final class Diagnostics {
         return new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.US).format(new Date());
     }
 
+    @SuppressWarnings("deprecation")
+    private static String versionName(Context context) {
+        try {
+            String value = context.getPackageManager()
+                    .getPackageInfo(context.getPackageName(), 0)
+                    .versionName;
+            return value == null || value.trim().isEmpty() ? "unknown" : value.trim();
+        } catch (Exception ignored) {
+            return "unknown";
+        }
+    }
+
     private static String safe(String message) {
         if (message == null || message.isEmpty()) {
             return "(empty)";
         }
         return message.replace('\r', ' ').replace('\n', ' ');
+    }
+
+    public static final class ExportResult {
+        public final String displayName;
+        public final Uri uri;
+
+        ExportResult(String displayName, Uri uri) {
+            this.displayName = displayName;
+            this.uri = uri;
+        }
     }
 }

@@ -30,6 +30,8 @@ import android.text.Selection;
 import android.text.TextUtils;
 import android.text.method.PasswordTransformationMethod;
 import android.view.Gravity;
+import android.view.inputmethod.EditorInfo;
+import android.view.inputmethod.InputMethodManager;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
@@ -110,6 +112,7 @@ public class MainActivity extends Activity {
     private CheckBox showTokenBox;
     private CheckBox sidebarWatchdogBox;
     private CheckBox sidebarAutoHideBox;
+    private CheckBox clipSystemBarsAutoHideBox;
     private CheckBox autoCacheLikedBox;
     private Button streamQualityButton;
     private Button cacheQualityButton;
@@ -145,6 +148,7 @@ public class MainActivity extends Activity {
     private int currentAudioSessionId;
     private float swipeStartX;
     private float swipeStartY;
+    private int searchRequestGeneration;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -809,7 +813,7 @@ public class MainActivity extends Activity {
         scroll.setBackgroundColor(COLOR_BG);
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(dp(18), dp(16), dp(18), dp(18));
+        root.setPadding(dp(22), dp(18), dp(22), dp(24));
         scroll.addView(root, matchScroll());
 
         root.addView(sectionTitle(playlist.title), matchWrap());
@@ -1594,49 +1598,87 @@ public class MainActivity extends Activity {
         Dialog dialog = new Dialog(this);
         dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
         ScrollView scroll = new ScrollView(this);
+        scroll.setFillViewport(true);
         scroll.setBackgroundColor(COLOR_BG);
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(dp(18), dp(16), dp(18), dp(18));
+        root.setPadding(dp(20), dp(18), dp(20), dp(22));
         root.setBackgroundColor(COLOR_BG);
         scroll.addView(root, matchScroll());
-        root.addView(sectionTitle(getString(R.string.search_music)), matchWrap());
+
+        LinearLayout header = row();
+        header.setGravity(Gravity.CENTER_VERTICAL);
+        TextView heading = sectionTitle(getString(R.string.search_music));
+        heading.setTextSize(24);
+        header.addView(heading, new LinearLayout.LayoutParams(
+                0,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                1f
+        ));
+        ImageButton close = smallIconButton(
+                R.drawable.ic_player_close,
+                COLOR_SURFACE_2,
+                COLOR_TEXT,
+                dp(46),
+                getString(R.string.settings_close)
+        );
+        close.setOnClickListener(v -> dialog.dismiss());
+        header.addView(close, new LinearLayout.LayoutParams(dp(46), dp(46)));
+        root.addView(header, matchWrap());
 
         LinearLayout searchBar = row();
         searchBar.setGravity(Gravity.CENTER_VERTICAL);
-        searchBar.setPadding(dp(12), dp(8), dp(8), dp(8));
-        searchBar.setBackground(panelBg(0xff0d141b, dp(18), COLOR_STROKE));
-        root.addView(searchBar, spaced());
+        searchBar.setPadding(dp(16), dp(4), dp(5), dp(4));
+        searchBar.setBackground(panelBg(0xff0d141b, dp(24), COLOR_STROKE));
+        LinearLayout.LayoutParams searchBarParams = matchWrap();
+        searchBarParams.setMargins(0, dp(14), 0, dp(16));
+        root.addView(searchBar, searchBarParams);
 
         EditText query = new EditText(this);
         query.setHint(R.string.search_hint);
         query.setSingleLine(true);
+        query.setImeOptions(EditorInfo.IME_ACTION_SEARCH);
         query.setTextColor(COLOR_TEXT);
         query.setHintTextColor(COLOR_MUTED);
         query.setTextSize(16);
         query.setBackgroundColor(Color.TRANSPARENT);
         query.setPadding(0, 0, dp(10), 0);
-        searchBar.addView(query, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        searchBar.addView(query, new LinearLayout.LayoutParams(0, dp(48), 1f));
 
         LinearLayout results = new LinearLayout(this);
         results.setOrientation(LinearLayout.VERTICAL);
 
-        Button search = smallButton(getString(R.string.search_music), COLOR_ACCENT, COLOR_BG);
-        search.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-        search.setOnClickListener(v -> runSearch(query.getText().toString(), results, dialog));
-        searchBar.addView(search, compactButtonParams(dp(118)));
+        ImageButton search = smallIconButton(
+                android.R.drawable.ic_menu_search,
+                COLOR_ACCENT,
+                COLOR_BG,
+                dp(48),
+                getString(R.string.search_music)
+        );
+        search.setOnClickListener(v -> runSearch(query.getText().toString(), results, dialog, search));
+        searchBar.addView(search, new LinearLayout.LayoutParams(dp(48), dp(48)));
+        query.setOnEditorActionListener((view, actionId, event) -> {
+            if (actionId == EditorInfo.IME_ACTION_SEARCH) {
+                runSearch(query.getText().toString(), results, dialog, search);
+                return true;
+            }
+            return false;
+        });
 
         root.addView(results, matchWrap());
 
         dialog.setContentView(scroll);
         prepareDialogWindow(dialog, 760);
+        dialog.setOnDismissListener(d -> searchRequestGeneration++);
         dialog.show();
+        query.requestFocus();
     }
 
-    private void runSearch(String rawQuery, LinearLayout results, Dialog dialog) {
+    private void runSearch(String rawQuery, LinearLayout results, Dialog dialog, View searchButton) {
         String query = rawQuery == null ? "" : rawQuery.trim();
         if (query.isEmpty()) {
             updateStatus(getString(R.string.search_query_empty));
+            Toast.makeText(this, R.string.search_query_empty, Toast.LENGTH_SHORT).show();
             return;
         }
         persistTypedToken();
@@ -1645,6 +1687,10 @@ public class MainActivity extends Activity {
             Toast.makeText(this, R.string.library_login_required, Toast.LENGTH_SHORT).show();
             return;
         }
+        hideKeyboard(searchButton);
+        int generation = ++searchRequestGeneration;
+        searchButton.setEnabled(false);
+        searchButton.setAlpha(0.5f);
         results.removeAllViews();
         addLibraryStatusRow(results, getString(R.string.search_loading));
         updateStatus(getString(R.string.search_loading));
@@ -1652,13 +1698,26 @@ public class MainActivity extends Activity {
         new Thread(() -> {
             try {
                 YandexMusicClient.SearchResults searchResults = new YmpRepository(appContext).search(query);
-                runOnUiThread(() -> renderSearchResults(searchResults, results, dialog));
+                runOnUiThread(() -> {
+                    if (generation != searchRequestGeneration || !dialog.isShowing()) {
+                        return;
+                    }
+                    searchButton.setEnabled(true);
+                    searchButton.setAlpha(1f);
+                    renderSearchResults(searchResults, results, dialog);
+                });
             } catch (Exception ex) {
                 Diagnostics.log(appContext, "YMP search failed: " + query, ex);
                 runOnUiThread(() -> {
+                    if (generation != searchRequestGeneration || !dialog.isShowing()) {
+                        return;
+                    }
+                    searchButton.setEnabled(true);
+                    searchButton.setAlpha(1f);
+                    String detail = firstNonEmpty(ex.getMessage(), ex.getClass().getSimpleName());
                     results.removeAllViews();
-                    addLibraryStatusRow(results, getString(R.string.search_failed, ex.getMessage()));
-                    updateStatus(getString(R.string.search_failed, ex.getMessage()));
+                    addLibraryStatusRow(results, getString(R.string.search_failed, detail));
+                    updateStatus(getString(R.string.search_failed, detail));
                 });
             }
         }, "YMP-Search").start();
@@ -1681,6 +1740,18 @@ public class MainActivity extends Activity {
                 searchResults.albums.size(),
                 searchResults.artists.size()
         ));
+        TextView summary = new TextView(this);
+        summary.setText(getString(
+                R.string.search_loaded,
+                searchResults.tracks.size(),
+                searchResults.albums.size(),
+                searchResults.artists.size()
+        ));
+        summary.setTextColor(COLOR_MUTED);
+        summary.setTextSize(13);
+        LinearLayout.LayoutParams summaryParams = matchWrap();
+        summaryParams.setMargins(0, 0, 0, dp(8));
+        results.addView(summary, summaryParams);
 
         if (!searchResults.tracks.isEmpty()) {
             results.addView(sectionTitle(getString(R.string.search_section_tracks)), spaced());
@@ -1764,14 +1835,16 @@ public class MainActivity extends Activity {
         LinearLayout item = new LinearLayout(this);
         item.setOrientation(LinearLayout.HORIZONTAL);
         item.setGravity(Gravity.CENTER_VERTICAL);
-        item.setPadding(dp(10), dp(10), dp(10), dp(10));
-        item.setBackground(panelBg(COLOR_SURFACE_2, dp(14), COLOR_STROKE));
+        item.setPadding(dp(9), dp(8), dp(8), dp(8));
+        item.setBackground(panelBg(COLOR_SURFACE_2, dp(8), COLOR_STROKE));
+        item.setMinimumHeight(dp(76));
+        item.setOnClickListener(v -> primaryAction.run());
 
         ImageView thumb = new ImageView(this);
         thumb.setImageResource(R.mipmap.ic_launcher);
-        thumb.setBackground(panelBg(0xff0b1118, dp(10), 0xff25384a));
+        thumb.setBackground(panelBg(0xff0b1118, dp(6), 0xff25384a));
         thumb.setScaleType(ImageView.ScaleType.CENTER_CROP);
-        int thumbSize = dp(62);
+        int thumbSize = dp(58);
         LinearLayout.LayoutParams thumbParams = new LinearLayout.LayoutParams(thumbSize, thumbSize);
         thumbParams.setMargins(0, 0, dp(12), 0);
         item.addView(thumb, thumbParams);
@@ -1798,21 +1871,31 @@ public class MainActivity extends Activity {
         subtitleView.setEllipsize(TextUtils.TruncateAt.END);
         info.addView(subtitleView, matchWrap());
 
-        LinearLayout actions = row();
-        actions.setGravity(Gravity.CENTER_VERTICAL);
-        LinearLayout.LayoutParams actionParams = matchWrap();
-        actionParams.setMargins(0, dp(8), 0, 0);
-        info.addView(actions, actionParams);
-
-        Button primary = smallButton(primaryLabel, COLOR_ACCENT, COLOR_BG);
-        primary.setOnClickListener(v -> primaryAction.run());
-        actions.addView(primary, rowButtonParams(1f));
-
         if (secondaryAction != null && secondaryLabel != null && !secondaryLabel.trim().isEmpty()) {
-            Button secondary = smallButton(secondaryLabel, COLOR_SURFACE, COLOR_TEXT);
+            ImageButton secondary = smallIconButton(
+                    R.drawable.ic_player_add_playlist,
+                    COLOR_SURFACE,
+                    COLOR_TEXT,
+                    dp(44),
+                    secondaryLabel
+            );
             secondary.setOnClickListener(v -> secondaryAction.run());
-            actions.addView(secondary, rowButtonParams(1f));
+            LinearLayout.LayoutParams secondaryParams = new LinearLayout.LayoutParams(dp(44), dp(44));
+            secondaryParams.setMargins(dp(7), 0, 0, 0);
+            item.addView(secondary, secondaryParams);
         }
+
+        ImageButton primary = smallIconButton(
+                R.drawable.ic_player_play,
+                COLOR_ACCENT,
+                COLOR_BG,
+                dp(44),
+                primaryLabel
+        );
+        primary.setOnClickListener(v -> primaryAction.run());
+        LinearLayout.LayoutParams primaryParams = new LinearLayout.LayoutParams(dp(44), dp(44));
+        primaryParams.setMargins(dp(7), 0, 0, 0);
+        item.addView(primary, primaryParams);
 
         root.addView(item, spaced());
     }
@@ -1834,10 +1917,28 @@ public class MainActivity extends Activity {
         });
     }
 
+    private void hideKeyboard(View view) {
+        InputMethodManager keyboard = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+        if (keyboard != null && view != null) {
+            keyboard.hideSoftInputFromWindow(view.getWindowToken(), 0);
+        }
+    }
+
     private void addTopBar(LinearLayout root) {
         LinearLayout top = row();
         top.setGravity(Gravity.CENTER_VERTICAL);
         root.addView(top, matchWrap());
+
+        ImageButton logo = new ImageButton(this);
+        logo.setImageResource(R.mipmap.ic_launcher);
+        logo.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        logo.setPadding(dp(2), dp(2), dp(2), dp(2));
+        logo.setBackgroundColor(Color.TRANSPARENT);
+        logo.setContentDescription(getString(R.string.open_about));
+        logo.setOnClickListener(v -> showAboutDialog());
+        LinearLayout.LayoutParams logoParams = new LinearLayout.LayoutParams(dp(52), dp(52));
+        logoParams.setMargins(0, 0, dp(12), 0);
+        top.addView(logo, logoParams);
 
         LinearLayout titleBox = new LinearLayout(this);
         titleBox.setOrientation(LinearLayout.VERTICAL);
@@ -1848,6 +1949,8 @@ public class MainActivity extends Activity {
         title.setTextColor(COLOR_TEXT);
         title.setTextSize(isWideLayout() ? 28 : 30);
         title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        title.setSingleLine(true);
+        title.setEllipsize(TextUtils.TruncateAt.END);
         titleBox.addView(title, matchWrap());
 
         TextView subtitle = new TextView(this);
@@ -1862,9 +1965,75 @@ public class MainActivity extends Activity {
         sidebarToggleButton.setOnClickListener(v -> toggleEmbeddedSideBar());
         top.addView(sidebarToggleButton, compactButtonParams(dp(52)));
 
-        Button settings = smallButton(getString(R.string.settings_menu), COLOR_SURFACE_2, COLOR_TEXT);
+        ImageButton settings = smallIconButton(
+                android.R.drawable.ic_menu_preferences,
+                COLOR_SURFACE_2,
+                COLOR_TEXT,
+                dp(46),
+                getString(R.string.settings_menu)
+        );
         settings.setOnClickListener(v -> showSettingsDialog());
-        top.addView(settings, compactButtonParams(dp(118)));
+        top.addView(settings, compactButtonParams(dp(52)));
+    }
+
+    private void showAboutDialog() {
+        Dialog dialog = new Dialog(this);
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+        LinearLayout root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setGravity(Gravity.CENTER_HORIZONTAL);
+        root.setPadding(dp(26), dp(24), dp(26), dp(22));
+        root.setBackground(panelBg(COLOR_SURFACE, dp(12), COLOR_STROKE));
+
+        ImageView logo = new ImageView(this);
+        logo.setImageResource(R.mipmap.ic_launcher);
+        logo.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        root.addView(logo, new LinearLayout.LayoutParams(dp(92), dp(92)));
+
+        TextView name = new TextView(this);
+        name.setText(R.string.app_name);
+        name.setTextColor(COLOR_TEXT);
+        name.setTextSize(26);
+        name.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        name.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams nameParams = matchWrap();
+        nameParams.setMargins(0, dp(10), 0, 0);
+        root.addView(name, nameParams);
+
+        TextView version = new TextView(this);
+        version.setText(getString(R.string.about_version, installedVersionName()));
+        version.setTextColor(COLOR_ACCENT);
+        version.setTextSize(15);
+        version.setGravity(Gravity.CENTER);
+        root.addView(version, matchWrap());
+
+        TextView author = new TextView(this);
+        author.setText(getString(R.string.about_author, getString(R.string.app_author)));
+        author.setTextColor(COLOR_MUTED);
+        author.setTextSize(14);
+        author.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams authorParams = matchWrap();
+        authorParams.setMargins(0, dp(4), 0, dp(18));
+        root.addView(author, authorParams);
+
+        Button close = pillButton(getString(R.string.settings_close), COLOR_ACCENT, COLOR_BG);
+        close.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        close.setOnClickListener(v -> dialog.dismiss());
+        root.addView(close, matchWrap());
+
+        dialog.setContentView(root);
+        prepareDialogWindow(dialog, 420);
+        dialog.show();
+    }
+
+    @SuppressWarnings("deprecation")
+    private String installedVersionName() {
+        try {
+            String value = getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
+            return value == null || value.trim().isEmpty() ? "unknown" : value.trim();
+        } catch (Exception ignored) {
+            return "unknown";
+        }
     }
 
     private void addCoverPanel(LinearLayout playerSurface, boolean wide) {
@@ -2036,15 +2205,28 @@ public class MainActivity extends Activity {
         root.addView(top, matchWrap());
 
         TextView title = sectionTitle(getString(R.string.settings_title));
+        title.setTextSize(25);
         top.addView(title, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
         Button close = smallButton(getString(R.string.settings_close), COLOR_SURFACE_2, COLOR_TEXT);
         close.setOnClickListener(v -> dialog.dismiss());
         top.addView(close, compactButtonParams(dp(110)));
 
-        addQualitySettings(root);
+        TextView hint = new TextView(this);
+        hint.setText(R.string.settings_hint);
+        hint.setTextColor(COLOR_MUTED);
+        hint.setTextSize(13);
+        hint.setLineSpacing(dp(2), 1f);
+        LinearLayout.LayoutParams hintParams = matchWrap();
+        hintParams.setMargins(0, dp(6), 0, 0);
+        root.addView(hint, hintParams);
+
         addAccountSettings(root);
+        addQualitySettings(root);
         addCacheSettings(root);
-        addIntegrationSettings(root);
+        addClipPlaybackSettings(root);
+        addSideBarSettings(root);
+        addEqualizerSettings(root);
+        addSystemSettings(root);
         addDiagnosticsSettings(root);
 
         dialog.setContentView(scroll);
@@ -2057,7 +2239,7 @@ public class MainActivity extends Activity {
             if (shown != null) {
                 shown.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
                 shown.setLayout(
-                        isWideLayout() ? Math.min(dp(720), getResources().getDisplayMetrics().widthPixels - dp(48)) : WindowManager.LayoutParams.MATCH_PARENT,
+                        isWideLayout() ? Math.min(dp(760), getResources().getDisplayMetrics().widthPixels - dp(48)) : WindowManager.LayoutParams.MATCH_PARENT,
                         WindowManager.LayoutParams.WRAP_CONTENT
                 );
             }
@@ -2076,16 +2258,25 @@ public class MainActivity extends Activity {
 
         streamQualityButton = pillButton(streamQualityText(), COLOR_ACCENT, COLOR_BG);
         streamQualityButton.setOnClickListener(v -> cycleStreamQuality());
-        root.addView(streamQualityButton, spaced());
-
         cacheQualityButton = pillButton(cacheQualityText(), COLOR_ACCENT_2, COLOR_BG);
         cacheQualityButton.setOnClickListener(v -> cycleCacheQuality());
-        root.addView(cacheQualityButton, spaced());
+        if (isWideLayout()) {
+            LinearLayout qualities = row();
+            qualities.addView(streamQualityButton, rowButtonParams());
+            qualities.addView(cacheQualityButton, rowButtonParams());
+            root.addView(qualities, spaced());
+        } else {
+            root.addView(streamQualityButton, spaced());
+            root.addView(cacheQualityButton, spaced());
+        }
     }
 
     private void addAccountSettings(LinearLayout root) {
         addSection(root, R.string.section_account);
-        addButton(root, R.string.start_device_login, v -> startDeviceLogin());
+        Button login = pillButton(getString(R.string.start_device_login), COLOR_ACCENT, COLOR_BG);
+        login.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        login.setOnClickListener(v -> startDeviceLogin());
+        root.addView(login, spaced());
 
         loginCodeView = new TextView(this);
         loginCodeView.setText(latestDeviceCode.isEmpty()
@@ -2159,8 +2350,19 @@ public class MainActivity extends Activity {
         addButton(root, R.string.clear_local_cache, v -> clearLocalCache());
     }
 
-    private void addIntegrationSettings(LinearLayout root) {
-        addSection(root, R.string.section_integrations);
+    private void addClipPlaybackSettings(LinearLayout root) {
+        addSection(root, R.string.section_clip_playback);
+        clipSystemBarsAutoHideBox = checkbox(R.string.clip_system_bars_auto_hide);
+        clipSystemBarsAutoHideBox.setChecked(YmpSettings.isClipSystemBarsAutoHideEnabled(this));
+        clipSystemBarsAutoHideBox.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            YmpSettings.setClipSystemBarsAutoHideEnabled(this, isChecked);
+            Diagnostics.log(this, "YMP Clip Wave system bars auto-hide saved: enabled=" + isChecked);
+        });
+        root.addView(clipSystemBarsAutoHideBox, spaced());
+    }
+
+    private void addSideBarSettings(LinearLayout root) {
+        addSection(root, R.string.section_sidebar);
         sidebarWatchdogBox = checkbox(R.string.enable_embedded_sidebar);
         sidebarWatchdogBox.setChecked(YmpSettings.isEmbeddedSideBarEnabled(this));
         sidebarWatchdogBox.setOnCheckedChangeListener((buttonView, isChecked) -> {
@@ -2195,9 +2397,10 @@ public class MainActivity extends Activity {
         });
         root.addView(sidebarAutoHideBox, spaced());
         addButton(root, R.string.show_hide_sidebar, v -> toggleEmbeddedSideBar());
-        addButton(root, R.string.open_battery_settings, v -> openBatterySettings());
-        addButton(root, R.string.open_autostart_settings, v -> openAutostartSettings());
+    }
 
+    private void addEqualizerSettings(LinearLayout root) {
+        addSection(root, R.string.section_equalizer);
         equalizerPackageEdit = new EditText(this);
         equalizerPackageEdit.setHint(R.string.equalizer_package_hint);
         equalizerPackageEdit.setText(YmpSettings.equalizerPackage(this));
@@ -2207,6 +2410,7 @@ public class MainActivity extends Activity {
         equalizerPackageEdit.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
         equalizerPackageEdit.setBackground(panelBg(COLOR_SURFACE_2, dp(10), COLOR_STROKE));
         equalizerPackageEdit.setPadding(dp(12), 0, dp(12), 0);
+        equalizerPackageEdit.setMinHeight(dp(48));
         root.addView(equalizerPackageEdit, spaced());
         addButton(root, R.string.save_equalizer_app, v -> {
             YmpSettings.setEqualizerPackage(this, equalizerPackageEdit.getText().toString());
@@ -2216,9 +2420,16 @@ public class MainActivity extends Activity {
         addButton(root, R.string.open_equalizer, v -> openEqualizer());
     }
 
+    private void addSystemSettings(LinearLayout root) {
+        addSection(root, R.string.section_system);
+        addButton(root, R.string.open_battery_settings, v -> openBatterySettings());
+        addButton(root, R.string.open_autostart_settings, v -> openAutostartSettings());
+    }
+
     private void addDiagnosticsSettings(LinearLayout root) {
         addSection(root, R.string.section_diagnostics);
         addButton(root, R.string.copy_diagnostics, v -> copyDiagnostics());
+        addButton(root, R.string.save_diagnostics_file, v -> saveDiagnosticsToDownloads());
         addButton(root, R.string.clear_diagnostics, v -> clearDiagnostics());
     }
 
@@ -3215,6 +3426,29 @@ public class MainActivity extends Activity {
         updateStatus(statusWithCache("Diagnostics copied to clipboard"));
     }
 
+    private void saveDiagnosticsToDownloads() {
+        updateStatus(statusWithCache(getString(R.string.diagnostics_saving)));
+        Context appContext = getApplicationContext();
+        new Thread(() -> {
+            try {
+                Diagnostics.ExportResult result = Diagnostics.exportToDownloads(appContext);
+                runOnUiThread(() -> {
+                    String message = getString(R.string.diagnostics_saved, result.displayName);
+                    Toast.makeText(this, message, Toast.LENGTH_LONG).show();
+                    updateStatus(statusWithCache(message));
+                });
+            } catch (Exception ex) {
+                Diagnostics.log(appContext, "Diagnostics export failed", ex);
+                String detail = firstNonEmpty(ex.getMessage(), ex.getClass().getSimpleName());
+                runOnUiThread(() -> {
+                    String message = getString(R.string.diagnostics_save_failed, detail);
+                    Toast.makeText(this, message, Toast.LENGTH_LONG).show();
+                    updateStatus(statusWithCache(message));
+                });
+            }
+        }, "YMP-ExportDiagnostics").start();
+    }
+
     private void copyLoginCode() {
         if (latestDeviceCode == null || latestDeviceCode.isEmpty()) {
             updateStatus(statusWithCache("Start Yandex login first"));
@@ -3318,9 +3552,21 @@ public class MainActivity extends Activity {
 
     private TextView addSection(LinearLayout root, int titleRes) {
         TextView section = sectionTitle(getString(titleRes));
+        LinearLayout heading = row();
+        heading.setGravity(Gravity.CENTER_VERTICAL);
+        View marker = new View(this);
+        marker.setBackground(panelBg(COLOR_ACCENT, dp(2), 0));
+        LinearLayout.LayoutParams markerParams = new LinearLayout.LayoutParams(dp(4), dp(22));
+        markerParams.setMargins(0, 0, dp(10), 0);
+        heading.addView(marker, markerParams);
+        heading.addView(section, new LinearLayout.LayoutParams(
+                0,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                1f
+        ));
         LinearLayout.LayoutParams params = matchWrap();
-        params.setMargins(0, dp(18), 0, dp(8));
-        root.addView(section, params);
+        params.setMargins(0, dp(22), 0, dp(9));
+        root.addView(heading, params);
         return section;
     }
 
@@ -3357,6 +3603,7 @@ public class MainActivity extends Activity {
         button.setImageResource(iconRes);
         button.setColorFilter(tintColor);
         button.setContentDescription(description);
+        button.setTooltipText(description);
         button.setScaleType(ImageView.ScaleType.CENTER);
         button.setBackground(panelBg(bgColor, dp(999), 0x00000000));
         button.setPadding(dp(10), dp(10), dp(10), dp(10));
@@ -3408,6 +3655,9 @@ public class MainActivity extends Activity {
         box.setText(titleRes);
         box.setTextColor(COLOR_TEXT);
         box.setTextSize(15);
+        box.setGravity(Gravity.CENTER_VERTICAL);
+        box.setMinHeight(dp(48));
+        box.setPadding(dp(2), dp(3), dp(4), dp(3));
         box.setButtonTintList(android.content.res.ColorStateList.valueOf(COLOR_ACCENT));
         return box;
     }

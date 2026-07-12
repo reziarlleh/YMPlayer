@@ -3,6 +3,7 @@ package dev.petrov.yaplay;
 import android.app.Activity;
 import android.app.PendingIntent;
 import android.content.Intent;
+import android.content.res.ColorStateList;
 import android.content.res.Configuration;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
@@ -13,6 +14,7 @@ import android.media.MediaMetadata;
 import android.media.session.MediaSession;
 import android.media.session.PlaybackState;
 import android.os.Bundle;
+import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.SystemClock;
@@ -21,14 +23,18 @@ import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.Window;
+import android.view.WindowInsets;
+import android.view.WindowInsetsController;
 import android.view.WindowManager;
 import android.widget.FrameLayout;
 import android.widget.ImageButton;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
+import android.widget.SeekBar;
 import android.widget.TextView;
 
 import androidx.media3.common.AudioAttributes;
+import androidx.media3.common.C;
 import androidx.media3.common.MediaItem;
 import androidx.media3.common.PlaybackException;
 import androidx.media3.common.Player;
@@ -67,6 +73,8 @@ public final class ClipWaveActivity extends Activity {
     private static final int COLOR_LIKE = 0xff35d6a5;
     private static final String MEDIA_ACTION_LIKE = "dev.petrov.yaplay.action.LIKE_CLIP";
     private static final long OVERLAY_HIDE_DELAY_MS = 4_500L;
+    private static final long CLIP_INFO_HIDE_DELAY_MS = 5_000L;
+    private static final long PROGRESS_UPDATE_INTERVAL_MS = 500L;
 
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private final ExecutorService networkExecutor = Executors.newFixedThreadPool(3);
@@ -95,15 +103,26 @@ public final class ClipWaveActivity extends Activity {
     private boolean advanceAsFinished;
     private boolean destroyed;
     private boolean recoveringFromError;
+    private boolean hasRenderedFrame;
+    private boolean pendingNowPlayingOverlay;
+    private boolean pendingPlayerTransition;
+    private boolean pendingPlayerTransitionFinished;
+    private float pendingPlayerTransitionPlayedSeconds;
+    private boolean progressDragging;
     private int playbackGeneration;
     private String startedFeedbackClipId = "";
 
     private FrameLayout overlayView;
+    private LinearLayout clipInfoOverlayView;
     private LinearLayout loadingPanel;
     private TextView loadingTextView;
     private TextView titleView;
     private TextView artistView;
     private TextView statusView;
+    private TextView transientTitleView;
+    private TextView transientArtistView;
+    private TextView clipTimeView;
+    private SeekBar clipProgressView;
     private ImageButton previousButton;
     private ImageButton playPauseButton;
     private ImageButton nextButton;
@@ -112,6 +131,23 @@ public final class ClipWaveActivity extends Activity {
     private final Runnable hideOverlayRunnable = () -> {
         if (overlayView != null && player != null && player.isPlaying()) {
             overlayView.setVisibility(View.GONE);
+        }
+    };
+
+    private final Runnable hideClipInfoRunnable = () -> {
+        if (clipInfoOverlayView != null) {
+            clipInfoOverlayView.setVisibility(View.GONE);
+        }
+    };
+
+    private final Runnable progressUpdateRunnable = new Runnable() {
+        @Override
+        public void run() {
+            if (destroyed) {
+                return;
+            }
+            updateClipProgress();
+            mainHandler.postDelayed(this, PROGRESS_UPDATE_INTERVAL_MS);
         }
     };
 
@@ -129,7 +165,8 @@ public final class ClipWaveActivity extends Activity {
         initializePlayer();
         initializeMediaSession();
         rebuildContent();
-        enterImmersiveMode();
+        applySystemBarsPreference();
+        mainHandler.post(progressUpdateRunnable);
 
         Diagnostics.log(this, "YMP Clip Wave opened");
         stopAudioPlayer();
@@ -145,20 +182,31 @@ public final class ClipWaveActivity extends Activity {
     public void onConfigurationChanged(Configuration newConfig) {
         super.onConfigurationChanged(newConfig);
         rebuildContent();
-        enterImmersiveMode();
+        applySystemBarsPreference();
     }
 
     @Override
     protected void onResume() {
         super.onResume();
-        enterImmersiveMode();
+        applySystemBarsPreference();
         updateControls();
+    }
+
+    @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        if (hasFocus) {
+            applySystemBarsPreference();
+        }
     }
 
     @Override
     protected void onStop() {
         if (!isChangingConfigurations() && player != null && player.isPlaying()) {
             player.pause();
+        }
+        if (!isChangingConfigurations()) {
+            showSystemBars();
         }
         super.onStop();
     }
@@ -167,6 +215,7 @@ public final class ClipWaveActivity extends Activity {
     protected void onDestroy() {
         destroyed = true;
         mainHandler.removeCallbacksAndMessages(null);
+        showSystemBars();
         if (playerView != null) {
             playerView.setPlayer(null);
         }
@@ -192,15 +241,20 @@ public final class ClipWaveActivity extends Activity {
             @Override
             public void onPlaybackStateChanged(int playbackState) {
                 if (playbackState == Player.STATE_BUFFERING) {
-                    showLoading(getString(R.string.clip_wave_buffering));
+                    if (!hasRenderedFrame) {
+                        showLoading(getString(R.string.clip_wave_buffering));
+                    } else {
+                        hideLoading();
+                    }
                 } else if (playbackState == Player.STATE_READY) {
                     hideLoading();
                     recoveringFromError = false;
                     sendStartedFeedbackOnce();
-                    scheduleOverlayHide();
+                    showPendingNowPlayingOverlay();
                 } else if (playbackState == Player.STATE_ENDED) {
                     requestAdvance(true);
                 }
+                updateClipProgress();
                 updateControls();
                 updatePlaybackState();
             }
@@ -209,12 +263,42 @@ public final class ClipWaveActivity extends Activity {
             public void onIsPlayingChanged(boolean isPlaying) {
                 if (isPlaying) {
                     hideLoading();
-                    scheduleOverlayHide();
-                } else {
+                    showPendingNowPlayingOverlay();
+                } else if (player != null
+                        && player.getPlaybackState() != Player.STATE_BUFFERING
+                        && player.getPlaybackState() != Player.STATE_ENDED) {
                     showOverlay(false);
                 }
+                updateClipProgress();
                 updateControls();
                 updatePlaybackState();
+            }
+
+            @Override
+            public void onRenderedFirstFrame() {
+                hasRenderedFrame = true;
+                hideLoading();
+                showPendingNowPlayingOverlay();
+            }
+
+            @Override
+            public void onMediaItemTransition(MediaItem mediaItem, int reason) {
+                if (mediaItem == null || nextClip == null || currentClip == null) {
+                    return;
+                }
+                if (!nextClip.clipId.equals(mediaItem.mediaId)
+                        || currentClip.clipId.equals(mediaItem.mediaId)) {
+                    return;
+                }
+                boolean finished = pendingPlayerTransition
+                        ? pendingPlayerTransitionFinished
+                        : reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO;
+                float playedSeconds = pendingPlayerTransition
+                        ? pendingPlayerTransitionPlayedSeconds
+                        : (finished ? normalizedDurationMs(currentClip.duration) / 1000f : 0f);
+                pendingPlayerTransition = false;
+                pendingPlayerTransitionPlayedSeconds = 0f;
+                adoptQueuedNext(finished, playedSeconds);
             }
 
             @Override
@@ -303,14 +387,27 @@ public final class ClipWaveActivity extends Activity {
         updateControls();
         if (currentClip == null) {
             showLoading(getString(R.string.clip_wave_loading));
-        } else if (player != null && player.getPlaybackState() == Player.STATE_BUFFERING) {
+        } else if (player != null
+                && player.getPlaybackState() == Player.STATE_BUFFERING
+                && !hasRenderedFrame) {
             showLoading(getString(R.string.clip_wave_buffering));
         } else if (advanceWhenReady && nextClip == null) {
-            showLoading(getString(R.string.clip_wave_loading_next));
-        } else if (player != null && player.getPlaybackState() == Player.STATE_READY) {
-            hideLoading();
+            if (!hasRenderedFrame) {
+                showLoading(getString(R.string.clip_wave_loading_next));
+            } else {
+                hideLoading();
+            }
         } else {
             hideLoading();
+        }
+        updateClipProgress();
+        if (currentClip != null && player != null && !player.isPlaying()
+                && player.getPlaybackState() != Player.STATE_BUFFERING) {
+            showOverlay(false);
+        } else if (pendingNowPlayingOverlay) {
+            showPendingNowPlayingOverlay();
+        } else if (currentClip != null) {
+            hideControlAndInfoOverlays();
         }
     }
 
@@ -347,8 +444,39 @@ public final class ClipWaveActivity extends Activity {
         );
         root.addView(loadingPanel, loadingParams);
 
+        clipInfoOverlayView = new LinearLayout(this);
+        clipInfoOverlayView.setOrientation(LinearLayout.VERTICAL);
+        clipInfoOverlayView.setPadding(dp(20), dp(14), dp(20), dp(14));
+        clipInfoOverlayView.setBackground(roundBackground(0xc90b1117, dp(8), 0x334f6372));
+        clipInfoOverlayView.setVisibility(View.GONE);
+
+        transientTitleView = new TextView(this);
+        transientTitleView.setTextColor(COLOR_TEXT);
+        transientTitleView.setTextSize(wide ? 30 : 25);
+        transientTitleView.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        transientTitleView.setMaxLines(2);
+        transientTitleView.setEllipsize(TextUtils.TruncateAt.END);
+        clipInfoOverlayView.addView(transientTitleView, matchWrap());
+
+        transientArtistView = new TextView(this);
+        transientArtistView.setTextColor(0xffd0dbe2);
+        transientArtistView.setTextSize(wide ? 18 : 16);
+        transientArtistView.setSingleLine(true);
+        transientArtistView.setEllipsize(TextUtils.TruncateAt.END);
+        clipInfoOverlayView.addView(transientArtistView, matchWrap());
+
+        FrameLayout.LayoutParams infoOverlayParams = new FrameLayout.LayoutParams(
+                wide ? Math.min(dp(560), getResources().getDisplayMetrics().widthPixels - dp(48))
+                        : ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                Gravity.BOTTOM | Gravity.START
+        );
+        infoOverlayParams.setMargins(dp(wide ? 24 : 12), 0, dp(wide ? 24 : 12), dp(wide ? 22 : 14));
+        root.addView(clipInfoOverlayView, infoOverlayParams);
+
         overlayView = new FrameLayout(this);
         overlayView.setClickable(false);
+        overlayView.setVisibility(View.GONE);
         root.addView(overlayView, matchFrame());
 
         ImageButton close = roundIconButton(
@@ -404,6 +532,57 @@ public final class ClipWaveActivity extends Activity {
         artistView.setSingleLine(true);
         artistView.setEllipsize(TextUtils.TruncateAt.END);
         info.addView(artistView, matchWrap());
+
+        LinearLayout progressRow = new LinearLayout(this);
+        progressRow.setOrientation(LinearLayout.HORIZONTAL);
+        progressRow.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout.LayoutParams progressRowParams = matchWrap();
+        progressRowParams.setMargins(0, dp(8), 0, 0);
+        info.addView(progressRow, progressRowParams);
+
+        clipProgressView = new SeekBar(this);
+        clipProgressView.setMax(1_000);
+        clipProgressView.setProgressTintList(ColorStateList.valueOf(COLOR_ACCENT));
+        clipProgressView.setProgressBackgroundTintList(ColorStateList.valueOf(0xff43515c));
+        clipProgressView.setThumbTintList(ColorStateList.valueOf(COLOR_ACCENT));
+        clipProgressView.setPadding(0, 0, dp(10), 0);
+        clipProgressView.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                if (fromUser) {
+                    updateClipTimeText(progress, clipDurationMs());
+                }
+            }
+
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {
+                progressDragging = true;
+                mainHandler.removeCallbacks(hideOverlayRunnable);
+            }
+
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {
+                progressDragging = false;
+                if (player != null) {
+                    player.seekTo(Math.max(0L, seekBar.getProgress()));
+                }
+                showOverlay(true);
+                updateClipProgress();
+            }
+        });
+        progressRow.addView(clipProgressView, new LinearLayout.LayoutParams(
+                0,
+                dp(36),
+                1f
+        ));
+
+        clipTimeView = new TextView(this);
+        clipTimeView.setText(getString(R.string.clip_time_template, "0:00", "0:00"));
+        clipTimeView.setTextColor(0xffd0dbe2);
+        clipTimeView.setTextSize(12);
+        clipTimeView.setGravity(Gravity.END | Gravity.CENTER_VERTICAL);
+        clipTimeView.setSingleLine(true);
+        progressRow.addView(clipTimeView, new LinearLayout.LayoutParams(dp(108), dp(36)));
 
         statusView = new TextView(this);
         statusView.setTextColor(0xff8296a5);
@@ -555,7 +734,8 @@ public final class ClipWaveActivity extends Activity {
                 nextClipSessionId = sourceSessionId;
                 seenClipIds.add(loaded.clip.clipId);
                 resolvedStreams.put(loaded.clip.clipId, loaded.stream);
-                showStatus(getString(R.string.clip_wave_next_ready, loaded.clip.title));
+                queueNextInPlayer();
+                showStatus(nextClipDescription(loaded.clip));
                 updateControls();
                 if (advanceWhenReady) {
                     boolean finished = advanceAsFinished;
@@ -570,24 +750,12 @@ public final class ClipWaveActivity extends Activity {
         if (clip == null || destroyed) {
             return;
         }
-        playbackGeneration++;
-        int generation = playbackGeneration;
-        currentClipSessionId = clipSessionId == null ? "" : clipSessionId;
-        if (!currentClipSessionId.isEmpty()) {
-            sessionId = currentClipSessionId;
+        int generation = activateClip(clip, clipSessionId);
+        if (!hasRenderedFrame) {
+            showLoading(getString(R.string.clip_wave_resolving));
+        } else {
+            hideLoading();
         }
-        currentClip = clip;
-        currentTrack = clipTracks.get(clip.clipId);
-        currentLiked = currentTrack != null && likedTrackKeys.contains(currentTrack.key);
-        startedFeedbackClipId = "";
-        recoveringFromError = false;
-        updateClipText();
-        updateMediaMetadata(null);
-        loadClipArtwork(clip);
-        loadTrackForClip(clip, generation);
-        updateControls();
-        showOverlay(false);
-        showLoading(getString(R.string.clip_wave_resolving));
 
         ClipWaveClient.StreamInfo stream = resolvedStreams.get(clip.clipId);
         if (stream != null) {
@@ -606,6 +774,29 @@ public final class ClipWaveActivity extends Activity {
         }
     }
 
+    private int activateClip(ClipWaveClient.Clip clip, String clipSessionId) {
+        playbackGeneration++;
+        int generation = playbackGeneration;
+        currentClipSessionId = clipSessionId == null ? "" : clipSessionId;
+        if (!currentClipSessionId.isEmpty()) {
+            sessionId = currentClipSessionId;
+        }
+        currentClip = clip;
+        currentTrack = clipTracks.get(clip.clipId);
+        currentLiked = currentTrack != null && likedTrackKeys.contains(currentTrack.key);
+        startedFeedbackClipId = "";
+        recoveringFromError = false;
+        pendingNowPlayingOverlay = true;
+        hideControlAndInfoOverlays();
+        updateClipText();
+        updateMediaMetadata(null);
+        loadClipArtwork(clip);
+        loadTrackForClip(clip, generation);
+        updateControls();
+        updateClipProgress();
+        return generation;
+    }
+
     private void prepareStream(
             ClipWaveClient.Clip clip,
             ClipWaveClient.StreamInfo stream,
@@ -614,11 +805,7 @@ public final class ClipWaveActivity extends Activity {
         if (!isCurrent(clip, generation) || stream == null || stream.url.isEmpty()) {
             return;
         }
-        MediaItem.Builder media = new MediaItem.Builder().setUri(stream.url);
-        if (!stream.mimeType.isEmpty()) {
-            media.setMimeType(stream.mimeType);
-        }
-        player.setMediaItem(media.build());
+        player.setMediaItem(buildMediaItem(clip, stream));
         player.prepare();
         player.play();
         showStatus(stream.preview
@@ -626,7 +813,53 @@ public final class ClipWaveActivity extends Activity {
                 : getString(R.string.clip_wave_next_preparing));
         if (nextClip == null) {
             loadNextClip();
+        } else {
+            queueNextInPlayer();
         }
+    }
+
+    private MediaItem buildMediaItem(ClipWaveClient.Clip clip, ClipWaveClient.StreamInfo stream) {
+        MediaItem.Builder media = new MediaItem.Builder()
+                .setMediaId(clip.clipId)
+                .setUri(stream.url);
+        if (!stream.mimeType.isEmpty()) {
+            media.setMimeType(stream.mimeType);
+        }
+        return media.build();
+    }
+
+    private void queueNextInPlayer() {
+        if (player == null || currentClip == null || nextClip == null) {
+            return;
+        }
+        ClipWaveClient.StreamInfo stream = resolvedStreams.get(nextClip.clipId);
+        MediaItem currentItem = player.getCurrentMediaItem();
+        if (stream == null || currentItem == null || !currentClip.clipId.equals(currentItem.mediaId)) {
+            return;
+        }
+        int currentIndex = player.getCurrentMediaItemIndex();
+        if (currentIndex < 0) {
+            return;
+        }
+        int nextIndex = player.getNextMediaItemIndex();
+        if (nextIndex != C.INDEX_UNSET
+                && nextClip.clipId.equals(player.getMediaItemAt(nextIndex).mediaId)) {
+            return;
+        }
+        if (currentIndex + 1 < player.getMediaItemCount()) {
+            player.removeMediaItems(currentIndex + 1, player.getMediaItemCount());
+        }
+        player.addMediaItem(buildMediaItem(nextClip, stream));
+        Diagnostics.log(this, "YMP Clip Wave next media queued: " + nextClip.clipId);
+    }
+
+    private boolean isNextQueuedInPlayer() {
+        if (player == null || nextClip == null) {
+            return false;
+        }
+        int nextIndex = player.getNextMediaItemIndex();
+        return nextIndex != C.INDEX_UNSET
+                && nextClip.clipId.equals(player.getMediaItemAt(nextIndex).mediaId);
     }
 
     private void handleUnplayableClip(ClipWaveClient.Clip clip, int generation, Exception error) {
@@ -641,11 +874,12 @@ public final class ClipWaveActivity extends Activity {
         if (currentClip == null || destroyed) {
             return;
         }
-        showOverlay(false);
         if (nextClip == null) {
             advanceWhenReady = true;
             advanceAsFinished = finished;
-            showLoading(getString(R.string.clip_wave_loading_next));
+            if (!hasRenderedFrame) {
+                showLoading(getString(R.string.clip_wave_loading_next));
+            }
             loadNextClip();
             return;
         }
@@ -656,6 +890,14 @@ public final class ClipWaveActivity extends Activity {
         ClipWaveClient.Clip old = currentClip;
         ClipWaveClient.Clip target = nextClip;
         if (old == null || target == null) {
+            return;
+        }
+        if (isNextQueuedInPlayer()) {
+            pendingPlayerTransition = true;
+            pendingPlayerTransitionFinished = finished;
+            pendingPlayerTransitionPlayedSeconds = currentPlayedSeconds();
+            player.seekToNextMediaItem();
+            player.play();
             return;
         }
         float playedSeconds = currentPlayedSeconds();
@@ -670,6 +912,35 @@ public final class ClipWaveActivity extends Activity {
         nextClipSessionId = "";
         advanceWhenReady = false;
         playClip(target, targetSessionId);
+        loadNextClip();
+    }
+
+    private void adoptQueuedNext(boolean finished, float playedSeconds) {
+        ClipWaveClient.Clip old = currentClip;
+        ClipWaveClient.Clip target = nextClip;
+        if (old == null || target == null) {
+            return;
+        }
+        String oldSessionId = currentClipSessionId;
+        String targetSessionId = nextClipSessionId.isEmpty() ? sessionId : nextClipSessionId;
+        sendFinishedOrSkipped(old, oldSessionId, finished, playedSeconds);
+        history.addLast(new HistoryEntry(old, oldSessionId));
+        while (history.size() > 40) {
+            history.removeFirst();
+        }
+        nextClip = null;
+        nextClipSessionId = "";
+        advanceWhenReady = false;
+        activateClip(target, targetSessionId);
+
+        int currentIndex = player == null ? -1 : player.getCurrentMediaItemIndex();
+        if (player != null && currentIndex > 0) {
+            player.removeMediaItems(0, currentIndex);
+        }
+        hideLoading();
+        sendStartedFeedbackOnce();
+        showPendingNowPlayingOverlay();
+        updatePlaybackState();
         loadNextClip();
     }
 
@@ -710,7 +981,8 @@ public final class ClipWaveActivity extends Activity {
                     nextClipSessionId = loaded.sessionId;
                     seenClipIds.add(loaded.clip.clipId);
                     resolvedStreams.put(loaded.clip.clipId, loaded.stream);
-                    showStatus(getString(R.string.clip_wave_next_ready, loaded.clip.title));
+                    queueNextInPlayer();
+                    showStatus(nextClipDescription(loaded.clip));
                     updateControls();
                     if (advanceWhenReady) {
                         boolean finished = advanceAsFinished;
@@ -792,7 +1064,8 @@ public final class ClipWaveActivity extends Activity {
                 resolvedStreams.put(clip.clipId, clipClient.resolveStream(clip));
                 postToMain(() -> {
                     if (nextClip != null && clip.clipId.equals(nextClip.clipId)) {
-                        showStatus(getString(R.string.clip_wave_next_ready, clip.title));
+                        queueNextInPlayer();
+                        showStatus(nextClipDescription(clip));
                     }
                 });
             } catch (Exception ex) {
@@ -1047,7 +1320,7 @@ public final class ClipWaveActivity extends Activity {
                     ? R.string.clip_wave_next_loading
                     : R.string.clip_wave_dynamic_hint);
         } else {
-            statusView.setText(getString(R.string.clip_wave_next_ready, nextClip.title));
+            statusView.setText(nextClipDescription(nextClip));
         }
     }
 
@@ -1104,6 +1377,10 @@ public final class ClipWaveActivity extends Activity {
         if (overlayView == null) {
             return;
         }
+        if (clipInfoOverlayView != null) {
+            clipInfoOverlayView.setVisibility(View.GONE);
+        }
+        mainHandler.removeCallbacks(hideClipInfoRunnable);
         overlayView.setVisibility(View.VISIBLE);
         mainHandler.removeCallbacks(hideOverlayRunnable);
         if (scheduleHide && player != null && player.isPlaying()) {
@@ -1111,8 +1388,33 @@ public final class ClipWaveActivity extends Activity {
         }
     }
 
-    private void scheduleOverlayHide() {
-        showOverlay(true);
+    private void hideControlAndInfoOverlays() {
+        mainHandler.removeCallbacks(hideOverlayRunnable);
+        mainHandler.removeCallbacks(hideClipInfoRunnable);
+        if (overlayView != null) {
+            overlayView.setVisibility(View.GONE);
+        }
+        if (clipInfoOverlayView != null) {
+            clipInfoOverlayView.setVisibility(View.GONE);
+        }
+    }
+
+    private void showPendingNowPlayingOverlay() {
+        if (!pendingNowPlayingOverlay || currentClip == null || clipInfoOverlayView == null) {
+            return;
+        }
+        pendingNowPlayingOverlay = false;
+        mainHandler.removeCallbacks(hideOverlayRunnable);
+        mainHandler.removeCallbacks(hideClipInfoRunnable);
+        if (overlayView != null) {
+            overlayView.setVisibility(View.GONE);
+        }
+        transientTitleView.setText(currentClip.title);
+        transientArtistView.setText(currentClip.artist.isEmpty()
+                ? getString(R.string.clip_wave_unknown_artist)
+                : currentClip.artist);
+        clipInfoOverlayView.setVisibility(View.VISIBLE);
+        mainHandler.postDelayed(hideClipInfoRunnable, CLIP_INFO_HIDE_DELAY_MS);
     }
 
     private void showLoading(String message) {
@@ -1122,7 +1424,6 @@ public final class ClipWaveActivity extends Activity {
         if (loadingTextView != null) {
             loadingTextView.setText(message == null ? "" : message);
         }
-        showOverlay(false);
     }
 
     private void hideLoading() {
@@ -1135,6 +1436,71 @@ public final class ClipWaveActivity extends Activity {
         if (statusView != null) {
             statusView.setText(message == null ? "" : message);
         }
+    }
+
+    private void updateClipProgress() {
+        if (clipProgressView == null || clipTimeView == null || progressDragging) {
+            return;
+        }
+        long duration = clipDurationMs();
+        long position = player == null ? 0L : Math.max(0L, player.getCurrentPosition());
+        if (duration > 0L) {
+            position = Math.min(position, duration);
+        }
+        int max = (int) Math.max(1L, Math.min(Integer.MAX_VALUE, duration));
+        clipProgressView.setMax(max);
+        clipProgressView.setProgress((int) Math.min(max, position));
+        if (player != null && duration > 0L) {
+            clipProgressView.setSecondaryProgress((int) Math.min(max, player.getBufferedPosition()));
+        }
+        clipProgressView.setEnabled(duration > 0L);
+        updateClipTimeText(position, duration);
+    }
+
+    private long clipDurationMs() {
+        if (player != null) {
+            long duration = player.getDuration();
+            if (duration != C.TIME_UNSET && duration > 0L) {
+                return duration;
+            }
+        }
+        return currentClip == null ? 0L : normalizedDurationMs(currentClip.duration);
+    }
+
+    private void updateClipTimeText(long positionMs, long durationMs) {
+        if (clipTimeView == null) {
+            return;
+        }
+        clipTimeView.setText(getString(
+                R.string.clip_time_template,
+                formatClipTime(positionMs),
+                formatClipTime(durationMs)
+        ));
+    }
+
+    private String formatClipTime(long valueMs) {
+        long totalSeconds = Math.max(0L, valueMs) / 1000L;
+        long hours = totalSeconds / 3600L;
+        long minutes = (totalSeconds % 3600L) / 60L;
+        long seconds = totalSeconds % 60L;
+        if (hours > 0L) {
+            return hours + ":" + twoDigits(minutes) + ":" + twoDigits(seconds);
+        }
+        return minutes + ":" + twoDigits(seconds);
+    }
+
+    private static String twoDigits(long value) {
+        return value < 10L ? "0" + value : Long.toString(value);
+    }
+
+    private String nextClipDescription(ClipWaveClient.Clip clip) {
+        if (clip == null) {
+            return getString(R.string.clip_wave_next_loading);
+        }
+        String artist = clip.artist.isEmpty()
+                ? getString(R.string.clip_wave_unknown_artist)
+                : clip.artist;
+        return getString(R.string.clip_wave_next_ready, clip.title, artist);
     }
 
     private void showFatalError(String message) {
@@ -1155,8 +1521,22 @@ public final class ClipWaveActivity extends Activity {
         startService(stop);
     }
 
-    @SuppressWarnings("deprecation")
     private void enterImmersiveMode() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            WindowInsetsController controller = getWindow().getInsetsController();
+            if (controller != null) {
+                controller.setSystemBarsBehavior(
+                        WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                );
+                controller.hide(WindowInsets.Type.systemBars());
+            }
+            return;
+        }
+        enterLegacyImmersiveMode();
+    }
+
+    @SuppressWarnings("deprecation")
+    private void enterLegacyImmersiveMode() {
         getWindow().getDecorView().setSystemUiVisibility(
                 View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
                         | View.SYSTEM_UI_FLAG_FULLSCREEN
@@ -1165,6 +1545,25 @@ public final class ClipWaveActivity extends Activity {
                         | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
                         | View.SYSTEM_UI_FLAG_LAYOUT_STABLE
         );
+    }
+
+    private void applySystemBarsPreference() {
+        if (YmpSettings.isClipSystemBarsAutoHideEnabled(this)) {
+            enterImmersiveMode();
+        } else {
+            showSystemBars();
+        }
+    }
+
+    @SuppressWarnings("deprecation")
+    private void showSystemBars() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            WindowInsetsController controller = getWindow().getInsetsController();
+            if (controller != null) {
+                controller.show(WindowInsets.Type.systemBars());
+            }
+        }
+        getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_VISIBLE);
     }
 
     private List<ClipWaveClient.Clip> uniqueClips(List<ClipWaveClient.Clip> source) {

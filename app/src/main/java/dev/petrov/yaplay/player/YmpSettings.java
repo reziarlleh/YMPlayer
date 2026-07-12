@@ -11,6 +11,7 @@ public final class YmpSettings {
     private static final String KEY_STREAM_QUALITY = "stream_quality";
     private static final String KEY_CACHE_QUALITY = "cache_quality";
     private static final String KEY_SIDEBAR_AUTO_HIDE = "sidebar_auto_hide";
+    private static final String KEY_CLIP_SYSTEM_BARS_AUTO_HIDE = "clip_system_bars_auto_hide";
 
     public static final String QUALITY_AUTO = "auto";
     public static final String QUALITY_ECONOMY = "economy";
@@ -43,6 +44,14 @@ public final class YmpSettings {
 
     public static void setEmbeddedSideBarAutoHideEnabled(Context context, boolean enabled) {
         prefs(context).edit().putBoolean(KEY_SIDEBAR_AUTO_HIDE, enabled).apply();
+    }
+
+    public static boolean isClipSystemBarsAutoHideEnabled(Context context) {
+        return prefs(context).getBoolean(KEY_CLIP_SYSTEM_BARS_AUTO_HIDE, true);
+    }
+
+    public static void setClipSystemBarsAutoHideEnabled(Context context, boolean enabled) {
+        prefs(context).edit().putBoolean(KEY_CLIP_SYSTEM_BARS_AUTO_HIDE, enabled).apply();
     }
 
     public static boolean isAutoCacheLikedEnabled(Context context) {

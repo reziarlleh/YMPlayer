@@ -196,20 +196,6 @@ public class EmbeddedSideBarService extends Service {
             return false;
         });
 
-        addPanelButton(panel, horizontal, R.drawable.ic_side_sleep, getString(R.string.sidebar_sleep), v -> {
-            resetAutoHide();
-            if (Ts18AudioControls.sleep(this)) {
-                collapse();
-            } else {
-                Toast.makeText(this, R.string.sidebar_sleep_unavailable, Toast.LENGTH_LONG).show();
-            }
-        });
-        addPanelButton(panel, horizontal, R.drawable.ic_side_reboot, "Reboot", v -> {
-            resetAutoHide();
-            if (!Ts18RebootHelper.requestReboot(this)) {
-                Toast.makeText(this, R.string.reboot_menu_unavailable, Toast.LENGTH_LONG).show();
-            }
-        });
         addPanelButton(panel, horizontal, R.drawable.ic_side_volume_up, "Volume up", v -> {
             resetAutoHide();
             Ts18AudioControls.adjustVolume(this, true);
@@ -231,6 +217,20 @@ public class EmbeddedSideBarService extends Service {
             Ts18AudioControls.back(this);
         });
         addPanelButton(panel, horizontal, hideIcon(edge), "Hide", v -> collapse());
+        addPanelButton(panel, horizontal, R.drawable.ic_side_sleep, getString(R.string.sidebar_sleep), v -> {
+            resetAutoHide();
+            if (Ts18AudioControls.sleep(this)) {
+                collapse();
+            } else {
+                Toast.makeText(this, R.string.sidebar_sleep_unavailable, Toast.LENGTH_LONG).show();
+            }
+        });
+        addPanelButton(panel, horizontal, R.drawable.ic_side_reboot, "Reboot", v -> {
+            resetAutoHide();
+            if (!Ts18RebootHelper.requestReboot(this)) {
+                Toast.makeText(this, R.string.reboot_menu_unavailable, Toast.LENGTH_LONG).show();
+            }
+        });
         return panel;
     }
 
