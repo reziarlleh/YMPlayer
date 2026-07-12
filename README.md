@@ -13,11 +13,11 @@ YMPlayer - неофициальный плеер Яндекс Музыки дл�
 
 ## Скачать
 
-Текущая тестовая сборка: **0.5.0**, `versionCode 60`.
+Текущая тестовая сборка: **0.5.1**, `versionCode 61`.
 
-- GitHub Release: [YMPlayer 0.5.0](https://github.com/reziarlleh/YMPlayer/releases/tag/v0.5.0)
-- APK в репозитории: [releases/0.5.0/YMPlayer-v0.5.0-debug-b60.apk](releases/0.5.0/YMPlayer-v0.5.0-debug-b60.apk)
-- Прямая ссылка на APK из релиза: [YMPlayer-v0.5.0-debug-b60.apk](https://github.com/reziarlleh/YMPlayer/releases/download/v0.5.0/YMPlayer-v0.5.0-debug-b60.apk)
+- GitHub Release: [YMPlayer 0.5.1](https://github.com/reziarlleh/YMPlayer/releases/tag/v0.5.1)
+- APK в репозитории: [releases/0.5.1/YMPlayer-v0.5.1-debug-b61.apk](releases/0.5.1/YMPlayer-v0.5.1-debug-b61.apk)
+- Прямая ссылка на APK из релиза: [YMPlayer-v0.5.1-debug-b61.apk](https://github.com/reziarlleh/YMPlayer/releases/download/v0.5.1/YMPlayer-v0.5.1-debug-b61.apk)
 
 Путь `app/build/outputs/apk/debug/...` появляется только после локальной сборки
 через Gradle и не является файлом в GitHub-репозитории.
@@ -77,9 +77,9 @@ YMPlayer - неофициальный плеер Яндекс Музыки дл�
 - Кнопка EQ/DSP с выбором найденного приложения эквалайзера.
 - Встроенный SideBar-оверлей для TS18: включается в настройках, показывается и
   скрывается с главного экрана.
-- Кнопка питания встроенного SideBar пытается открыть системное меню питания
-  Android SystemUI `GlobalActions` через скрытый `statusbar` service без
-  AccessibilityService. Для перезагрузки есть отдельная кнопка с подтвержденным
+- Кнопка сна встроенного SideBar отправляет штатную команду TS18/NWD
+  `ACTION_KEY_VALUE` с `extra_key_value=0`: она гасит экран и переводит
+  магнитолу в сон. Для перезагрузки оставлена отдельная кнопка с подтвержденным
   TS18 reboot UI.
 - TS18-совместимые команды громкости/mute через NWD broadcasts с Android
   AudioManager fallback на обычных устройствах.
@@ -147,7 +147,7 @@ YMPlayer - неофициальный плеер Яндекс Музыки дл�
 YMPlayer не обходит DRM. Если полный поток защищён, используется официальное
 `previewUrl`, когда оно есть; иначе клип пропускается. Доступность раздела и
 полных потоков может зависеть от аккаунта, подписки, региона и текущего
-поведения неофициального API, поэтому первый запуск 0.5.0 нужно проверить на
+поведения неофициального API, поэтому первый запуск 0.5.x нужно проверить на
 реальном устройстве по встроенной диагностике.
 
 ## Встроенный SideBar
@@ -158,27 +158,24 @@ YMPlayer не обходит DRM. Если полный поток защищё�
 home, back и скрытие панели. Размер кнопок в YMPlayer оставлен крупнее исходного
 варианта.
 
-Встроенный SideBar не использует AccessibilityService. Кнопка питания сначала
-пытается открыть Android SystemUI `GlobalActions` через скрытые
-`StatusBarManager.showGlobalActions()` /
-`IStatusBarService.showGlobalActionsMenu()`, найденные при анализе TS18 3.1
-firmware. Если прошивка блокирует этот путь, остаётся запасной
-Android `ACTION_REQUEST_SHUTDOWN`. Для перезагрузки добавлена отдельная кнопка,
-которая использует подтвержденный на TS18 путь: прямой запуск
+Встроенный SideBar не использует AccessibilityService. Кнопка с иконкой луны
+отправляет ту же команду сна, которая работала в исходном SideBar:
+`com.nwd.action.ACTION_KEY_VALUE` с байтовым `extra_key_value=0`. После команды
+панель сворачивается, а экран магнитолы гаснет. Попытки программного полного
+выключения удалены из активного кода.
+
+Для перезагрузки оставлена отдельная кнопка, которая использует подтвержденный
+на TS18 путь: прямой запуск
 `com.android.launcher/com.nwd.tools.reboot.RebootActivity` или
 `com.nwd.toolallinone.app/com.nwd.tools.reboot.RebootActivity`, затем
 launcher-запросы `ACTION_REQUEST_START_ACTIVITY`, `ACTION_START_ACTIVITY` и
-`ACTION_START_NWD_ACTIVITY` с `extra_package_name`/`extra_class_name`. Прямой
-`ACTION_MCU_POWER_OFF` и старый путь `extra_key_value=0` не используются,
-потому что они могут выключать/усыплять устройство без нужного подтверждения.
+`ACTION_START_NWD_ACTIVITY` с `extra_package_name`/`extra_class_name`.
 
 Для громкости/mute на TS18 YMPlayer отправляет
 `com.nwd.action.ACTION_KEY_VALUE` только с `extra_key_value` либо
 `com.nwd.can.action.ACTION_PLATFORM_SEND_CAN_VOLUME`, если устройство
-использует CAN-громкость. Подтвержденное пользователем выключение отдельно
-использует vendor power API и типизированную последовательность длинного
-нажатия. На обычных Android-устройствах громкость управляется через стандартный
-`AudioManager`.
+использует CAN-громкость. На обычных Android-устройствах громкость управляется
+через стандартный `AudioManager`.
 
 ## Сборка из исходников
 
@@ -193,7 +190,7 @@ $env:Path = "$env:JAVA_HOME\bin;$env:Path"
 После локальной сборки APK будет лежать в:
 
 ```text
-app/build/outputs/apk/debug/YMPlayer-v0.5.0-debug-b60.apk
+app/build/outputs/apk/debug/YMPlayer-v0.5.1-debug-b61.apk
 ```
 
 Этот путь относится только к локальной машине разработчика. На GitHub готовые

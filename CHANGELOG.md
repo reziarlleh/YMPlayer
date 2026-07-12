@@ -3,6 +3,26 @@
 This file tracks only working, testable versions. Broken or experimental
 intermediate builds should not be added here.
 
+## 0.5.1 - 2026-07-12
+
+Final SideBar power-button simplification.
+
+- Replaced the non-working SideBar shutdown button with an explicit Sleep
+  button and crescent-moon icon.
+- Restored the command proven by the original standalone SideBar on TS18:
+  `com.nwd.action.ACTION_KEY_VALUE` with byte `extra_key_value=0`.
+- Collapse the SideBar after a successful sleep request so it wakes in its
+  unobtrusive edge-handle state.
+- Removed the shutdown confirmation overlay, hidden StatusBar/PowerManager
+  reflection, `sys.powerctl`, vendor shutdown-property broadcasts, and long
+  power-key experiments from the active APK.
+- Kept the separately confirmed TS18 reboot button and reduced its helper to
+  only the direct/launcher-mediated `RebootActivity` paths.
+- Kept audio playback, Clip Wave, My Wave, cache, playlists, artwork, and all
+  other SideBar controls unchanged.
+- Updated the build to `YMPlayer-v0.5.1-debug-b61.apk` while preserving
+  Android 10 compatibility (`minSdk 29`).
+
 ## 0.5.0 - 2026-07-12
 
 First testable Clip Wave release.

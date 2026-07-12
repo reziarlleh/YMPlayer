@@ -21,9 +21,6 @@
             <action android:name="android.media.action.DISPLAY_AUDIO_EFFECT_CONTROL_PANEL" />
         </intent>
         <intent>
-            <action android:name="android.intent.action.ACTION_REQUEST_SHUTDOWN" />
-        </intent>
-        <intent>
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LAUNCHER" />
         </intent>

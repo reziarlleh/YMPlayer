@@ -18,6 +18,7 @@ public final class Ts18AudioControls {
     private static final String SETTING_CAN_USE_AMP_VOLUME = "can_use_amp_volume_key";
     private static final String SETTING_MUTE_STATE = "mcu_mute_state";
 
+    private static final int KEY_SLEEP = 0;
     private static final int KEY_MUTE = 2;
     private static final int KEY_VOLUME_UP = 14;
     private static final int KEY_VOLUME_DOWN = 15;
@@ -60,6 +61,10 @@ public final class Ts18AudioControls {
 
     public static boolean back(Context context) {
         return sendTs18Key(context, KEY_BACK, "back");
+    }
+
+    public static boolean sleep(Context context) {
+        return sendTs18Key(context, KEY_SLEEP, "sleep");
     }
 
     public static boolean home(Context context) {

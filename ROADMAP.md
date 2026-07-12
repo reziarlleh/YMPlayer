@@ -228,16 +228,28 @@
   validation for regional/account availability and the exact stream variants
   returned to the user's subscription.
 
-## Planned 0.4.x Features
+## Completed In 0.5.1
 
-- Keep 0.4.x focused on stabilization while the user tests 0.4.12 on a real
-  device.
+- Replaced the unsuccessful SideBar shutdown work with the original TS18 sleep
+  command (`ACTION_KEY_VALUE`, byte key `0`) and a clear moon icon.
+- Removed all inactive shutdown confirmation, hidden Android API,
+  `sys.powerctl`, and vendor shutdown-property code from the APK.
+- Kept the separately confirmed TS18 reboot UI path intact in a small dedicated
+  helper.
+- Declared the SideBar power-function investigation closed: future SideBar work
+  should be limited to regressions in its established sleep, reboot, volume,
+  mute, home, back, edge-swipe, and auto-hide behavior.
+
+## Planned 0.5.x Features
+
+- Keep the established audio player and SideBar behavior stable while 0.5.x is
+  tested on real devices.
 - Current audit and prioritized fix list: [PROJECT_AUDIT.md](PROJECT_AUDIT.md).
 - Next cleanup priority is reducing stale background UI updates with a shared
   executor and simple cancellation tokens for search/import/source-loading
   operations.
-- Confirm on device that the 0.4.12 SideBar shutdown path powers off the TS18
-  after the YMPlayer confirmation instead of only putting the display to sleep.
+- Confirm Clip Wave rotor/stream availability and linked-track likes on the
+  user's Yandex account and region.
 - Improve local playlist management with optional folder diff details and
   better large-playlist editing ergonomics.
 - Add a favorite-artist action only when a stable Yandex Music endpoint is

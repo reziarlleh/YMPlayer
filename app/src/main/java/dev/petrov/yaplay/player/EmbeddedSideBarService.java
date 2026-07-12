@@ -26,12 +26,9 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowManager;
-import android.widget.Button;
-import android.widget.FrameLayout;
 import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
-import android.widget.TextView;
 import android.widget.Toast;
 
 import java.util.EnumMap;
@@ -55,7 +52,6 @@ public class EmbeddedSideBarService extends Service {
     private final Map<Edge, View> collapsedViews = new EnumMap<>(Edge.class);
     private WindowManager windowManager;
     private View panelView;
-    private View shutdownConfirmationView;
     private Edge activeEdge = Edge.RIGHT;
     private Runnable autoHideRunnable;
 
@@ -200,13 +196,17 @@ public class EmbeddedSideBarService extends Service {
             return false;
         });
 
-        addPanelButton(panel, horizontal, R.drawable.ic_side_power, "Power off", v -> {
+        addPanelButton(panel, horizontal, R.drawable.ic_side_sleep, getString(R.string.sidebar_sleep), v -> {
             resetAutoHide();
-            showShutdownConfirmation();
+            if (Ts18AudioControls.sleep(this)) {
+                collapse();
+            } else {
+                Toast.makeText(this, R.string.sidebar_sleep_unavailable, Toast.LENGTH_LONG).show();
+            }
         });
         addPanelButton(panel, horizontal, R.drawable.ic_side_reboot, "Reboot", v -> {
             resetAutoHide();
-            if (!YmpPowerMenuHelper.requestReboot(this)) {
+            if (!Ts18RebootHelper.requestReboot(this)) {
                 Toast.makeText(this, R.string.reboot_menu_unavailable, Toast.LENGTH_LONG).show();
             }
         });
@@ -289,131 +289,6 @@ public class EmbeddedSideBarService extends Service {
         return params;
     }
 
-    private void showShutdownConfirmation() {
-        if (shutdownConfirmationView != null) {
-            return;
-        }
-        cancelAutoHide();
-
-        FrameLayout overlay = new FrameLayout(this);
-        overlay.setBackgroundColor(Color.argb(190, 0, 0, 0));
-        overlay.setClickable(true);
-
-        LinearLayout dialog = new LinearLayout(this);
-        dialog.setOrientation(LinearLayout.VERTICAL);
-        dialog.setPadding(dp(28), dp(24), dp(28), dp(22));
-        dialog.setBackground(roundRect(
-                Color.rgb(20, 27, 36),
-                Color.argb(145, 255, 255, 255),
-                dp(14)
-        ));
-        dialog.setClickable(true);
-
-        TextView title = new TextView(this);
-        title.setText(R.string.shutdown_confirm_title);
-        title.setTextColor(Color.WHITE);
-        title.setTextSize(24);
-        dialog.addView(title, new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT
-        ));
-
-        TextView message = new TextView(this);
-        message.setText(R.string.shutdown_confirm_message);
-        message.setTextColor(Color.rgb(224, 229, 236));
-        message.setTextSize(17);
-        LinearLayout.LayoutParams messageParams = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT
-        );
-        messageParams.setMargins(0, dp(12), 0, dp(22));
-        dialog.addView(message, messageParams);
-
-        LinearLayout actions = new LinearLayout(this);
-        actions.setOrientation(LinearLayout.HORIZONTAL);
-        actions.setGravity(Gravity.END | Gravity.CENTER_VERTICAL);
-
-        Button cancel = dialogButton(
-                R.string.cancel_action,
-                Color.rgb(54, 64, 77),
-                Color.rgb(101, 115, 132)
-        );
-        cancel.setOnClickListener(v -> {
-            Diagnostics.log(this, "YMP shutdown confirmation cancelled");
-            removeShutdownConfirmation();
-            resetAutoHide();
-        });
-        actions.addView(cancel, actionButtonParams());
-
-        Button confirm = dialogButton(
-                R.string.shutdown_confirm_action,
-                Color.rgb(190, 52, 52),
-                Color.rgb(242, 116, 102)
-        );
-        confirm.setOnClickListener(v -> {
-            confirm.setEnabled(false);
-            confirm.setText(R.string.shutdown_request_sending);
-            Diagnostics.log(this, "YMP shutdown confirmed by user");
-            boolean requested = YmpPowerMenuHelper.executeConfirmedShutdown(this);
-            if (!requested) {
-                confirm.setEnabled(true);
-                confirm.setText(R.string.shutdown_confirm_action);
-                Toast.makeText(this, R.string.shutdown_menu_unavailable, Toast.LENGTH_LONG).show();
-                return;
-            }
-            mainHandler.postDelayed(() -> {
-                removeShutdownConfirmation();
-                collapse();
-            }, 650L);
-        });
-        actions.addView(confirm, actionButtonParams());
-        dialog.addView(actions, new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT
-        ));
-
-        int availableWidth = Math.max(1, getResources().getDisplayMetrics().widthPixels - dp(32));
-        FrameLayout.LayoutParams dialogParams = new FrameLayout.LayoutParams(
-                Math.min(dp(520), availableWidth),
-                ViewGroup.LayoutParams.WRAP_CONTENT,
-                Gravity.CENTER
-        );
-        overlay.addView(dialog, dialogParams);
-        overlay.setOnClickListener(v -> cancel.performClick());
-
-        WindowManager.LayoutParams params = new WindowManager.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
-                PixelFormat.TRANSLUCENT
-        );
-        params.gravity = Gravity.FILL;
-        if (safeAdd(overlay, params)) {
-            shutdownConfirmationView = overlay;
-            Diagnostics.log(this, "YMP shutdown confirmation shown");
-        } else {
-            Toast.makeText(this, R.string.shutdown_menu_unavailable, Toast.LENGTH_LONG).show();
-        }
-    }
-
-    private Button dialogButton(int textRes, int fillColor, int strokeColor) {
-        Button button = new Button(this);
-        button.setText(textRes);
-        button.setTextColor(Color.WHITE);
-        button.setTextSize(16);
-        button.setAllCaps(false);
-        button.setMinHeight(dp(54));
-        button.setBackground(roundRect(fillColor, strokeColor, dp(10)));
-        return button;
-    }
-
-    private LinearLayout.LayoutParams actionButtonParams() {
-        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(0, dp(58), 1f);
-        params.setMargins(dp(5), 0, dp(5), 0);
-        return params;
-    }
-
     private int baseWindowFlags() {
         return WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
                 | WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
@@ -446,16 +321,8 @@ public class EmbeddedSideBarService extends Service {
     }
 
     private void destroyOverlays() {
-        removeShutdownConfirmation();
         removePanel();
         removeCollapsed();
-    }
-
-    private void removeShutdownConfirmation() {
-        if (shutdownConfirmationView != null) {
-            safeRemove(shutdownConfirmationView);
-            shutdownConfirmationView = null;
-        }
     }
 
     private void safeRemove(View view) {
