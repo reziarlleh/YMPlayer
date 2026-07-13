@@ -148,7 +148,16 @@
     <string name="settings_menu">Settings</string>
     <string name="open_search_and_playlists">Search and playlists</string>
     <string name="settings_title">Settings</string>
+    <string name="settings_back">Back</string>
     <string name="settings_close">Close</string>
+    <string name="settings_account_summary">Device code, Yandex sign-in, and manual OAuth token</string>
+    <string name="settings_quality_summary">Online stream and permanent cache quality</string>
+    <string name="settings_cache_summary">Liked-track downloads, conditions, and cleanup</string>
+    <string name="settings_clips_summary">System bars during Clip Wave playback</string>
+    <string name="settings_sidebar_summary">Built-in side panel and automatic hiding</string>
+    <string name="settings_equalizer_summary">Choose and launch an audio processing app</string>
+    <string name="settings_system_summary">Battery management and YMPlayer autostart</string>
+    <string name="settings_diagnostics_summary">Copy, save, and clear the diagnostic log</string>
     <string name="settings_status_template">Status: %1$s</string>
     <string name="settings_action_received">Pressed: %1$s</string>
     <string name="open_about">About YMPlayer</string>

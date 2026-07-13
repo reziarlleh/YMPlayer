@@ -157,7 +157,16 @@
     <string name="settings_menu">Настройки</string>
     <string name="open_search_and_playlists">Поиск и плейлисты</string>
     <string name="settings_title">Настройки</string>
+    <string name="settings_back">Назад</string>
     <string name="settings_close">Закрыть</string>
+    <string name="settings_account_summary">Код устройства, вход в Яндекс и ручной OAuth-токен</string>
+    <string name="settings_quality_summary">Качество онлайн-потока и постоянного кэша</string>
+    <string name="settings_cache_summary">Автозагрузка избранного, условия и очистка</string>
+    <string name="settings_clips_summary">Системные панели во время Волны клипов</string>
+    <string name="settings_sidebar_summary">Встроенная боковая панель и автоскрытие</string>
+    <string name="settings_equalizer_summary">Выбор и запуск приложения обработки звука</string>
+    <string name="settings_system_summary">Энергосбережение и автозапуск YMPlayer</string>
+    <string name="settings_diagnostics_summary">Копирование, сохранение и очистка журнала</string>
     <string name="settings_status_template">Статус: %1$s</string>
     <string name="settings_action_received">Нажато: %1$s</string>
     <string name="open_about">О приложении YMPlayer</string>

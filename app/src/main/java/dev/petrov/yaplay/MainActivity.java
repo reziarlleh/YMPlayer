@@ -80,6 +80,14 @@ public class MainActivity extends Activity {
     private static final int COLOR_ACCENT_2 = 0xff32d6c2;
     private static final int COLOR_DANGER = 0xffe84a5f;
     private static final int REQUEST_STORAGE_ROOT = 6102;
+    private static final int SETTINGS_SECTION_ACCOUNT = 1;
+    private static final int SETTINGS_SECTION_QUALITY = 2;
+    private static final int SETTINGS_SECTION_CACHE = 3;
+    private static final int SETTINGS_SECTION_CLIPS = 4;
+    private static final int SETTINGS_SECTION_SIDEBAR = 5;
+    private static final int SETTINGS_SECTION_EQUALIZER = 6;
+    private static final int SETTINGS_SECTION_SYSTEM = 7;
+    private static final int SETTINGS_SECTION_DIAGNOSTICS = 8;
     private static final int COVER_RETRY_MAX = 4;
     private static final long COVER_RETRY_DELAY_MS = 12_000L;
 
@@ -2240,34 +2248,32 @@ public class MainActivity extends Activity {
     private void showSettingsDialog() {
         Dialog dialog = new Dialog(this);
         dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
-        ScrollView scroll = new ScrollView(this);
-        scroll.setFillViewport(false);
-        scroll.setBackgroundColor(COLOR_BG);
-
-        LinearLayout root = new LinearLayout(this);
-        root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(dp(18), dp(16), dp(18), dp(18));
-        scroll.addView(root, matchScroll());
+        LinearLayout shell = new LinearLayout(this);
+        shell.setOrientation(LinearLayout.VERTICAL);
+        shell.setBackgroundColor(COLOR_BG);
+        shell.setPadding(dp(isWideLayout() ? 24 : 14), dp(12), dp(isWideLayout() ? 24 : 14), dp(12));
 
         LinearLayout top = row();
         top.setGravity(Gravity.CENTER_VERTICAL);
-        root.addView(top, matchWrap());
+        shell.addView(top, matchWrap());
+
+        Button back = smallButton(getString(R.string.settings_back), COLOR_SURFACE_2, COLOR_TEXT);
+        back.setVisibility(View.GONE);
+        top.addView(back, compactButtonParams(dp(104)));
 
         TextView title = sectionTitle(getString(R.string.settings_title));
         title.setTextSize(25);
-        top.addView(title, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        title.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout.LayoutParams titleParams = new LinearLayout.LayoutParams(
+                0,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                1f
+        );
+        titleParams.setMargins(dp(10), 0, dp(10), 0);
+        top.addView(title, titleParams);
         Button close = smallButton(getString(R.string.settings_close), COLOR_SURFACE_2, COLOR_TEXT);
         close.setOnClickListener(v -> dialog.dismiss());
         top.addView(close, compactButtonParams(dp(110)));
-
-        TextView hint = new TextView(this);
-        hint.setText(R.string.settings_hint);
-        hint.setTextColor(COLOR_MUTED);
-        hint.setTextSize(13);
-        hint.setLineSpacing(dp(2), 1f);
-        LinearLayout.LayoutParams hintParams = matchWrap();
-        hintParams.setMargins(0, dp(6), 0, 0);
-        root.addView(hint, hintParams);
 
         settingsFeedbackView = new TextView(this);
         settingsFeedbackView.setTextColor(COLOR_TEXT);
@@ -2276,43 +2282,261 @@ public class MainActivity extends Activity {
         settingsFeedbackView.setPadding(dp(13), dp(10), dp(13), dp(10));
         settingsFeedbackView.setBackground(panelBg(0xff17362f, dp(10), 0xff2a7463));
         settingsFeedbackView.setVisibility(View.GONE);
-        root.addView(settingsFeedbackView, spaced());
+        shell.addView(settingsFeedbackView, spaced());
 
-        addAccountSettings(root);
-        addQualitySettings(root);
-        addCacheSettings(root);
-        addClipPlaybackSettings(root);
-        addSideBarSettings(root);
-        addEqualizerSettings(root);
-        addSystemSettings(root);
-        addDiagnosticsSettings(root);
+        FrameLayout contentHost = new FrameLayout(this);
+        shell.addView(contentHost, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                0,
+                1f
+        ));
 
-        dialog.setContentView(scroll);
+        SettingsNavigator navigator = new SettingsNavigator(contentHost, title, back);
+        back.setOnClickListener(v -> navigator.showIndex());
+        dialog.setOnKeyListener((d, keyCode, event) -> {
+            if (keyCode == KeyEvent.KEYCODE_BACK && navigator.isInSection()) {
+                if (event.getAction() == KeyEvent.ACTION_UP) {
+                    navigator.showIndex();
+                }
+                return true;
+            }
+            return false;
+        });
+
+        dialog.setContentView(shell);
         Window window = dialog.getWindow();
         if (window != null) {
-            window.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+            window.setBackgroundDrawable(new ColorDrawable(COLOR_BG));
         }
         dialog.setOnShowListener(d -> {
             Window shown = dialog.getWindow();
             if (shown != null) {
-                shown.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+                shown.setBackgroundDrawable(new ColorDrawable(COLOR_BG));
+                shown.clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);
+                shown.setStatusBarColor(COLOR_BG);
+                shown.setNavigationBarColor(COLOR_BG);
                 shown.setLayout(
-                        isWideLayout() ? Math.min(dp(760), getResources().getDisplayMetrics().widthPixels - dp(48)) : WindowManager.LayoutParams.MATCH_PARENT,
-                        WindowManager.LayoutParams.WRAP_CONTENT
+                        WindowManager.LayoutParams.MATCH_PARENT,
+                        WindowManager.LayoutParams.MATCH_PARENT
                 );
             }
+            navigator.showIndex();
         });
         dialog.setOnDismissListener(d -> {
             settingsFeedbackView = null;
-            loginCodeView = null;
-            deviceLoginButton = null;
-            refreshDeviceCodeButton = null;
+            clearSettingsSectionViews();
         });
         dialog.show();
     }
 
+    private final class SettingsNavigator {
+        private final FrameLayout host;
+        private final TextView title;
+        private final Button back;
+        private final Map<Integer, View> categoryViews = new LinkedHashMap<>();
+        private int currentSection;
+        private int lastSection = SETTINGS_SECTION_ACCOUNT;
+
+        SettingsNavigator(FrameLayout host, TextView title, Button back) {
+            this.host = host;
+            this.title = title;
+            this.back = back;
+        }
+
+        boolean isInSection() {
+            return currentSection != 0;
+        }
+
+        void showIndex() {
+            currentSection = 0;
+            clearSettingsSectionViews();
+            title.setText(R.string.settings_title);
+            back.setVisibility(View.GONE);
+            categoryViews.clear();
+
+            ScrollView scroll = settingsScroll();
+            LinearLayout root = settingsContent();
+            scroll.addView(root, matchScroll());
+
+            TextView hint = new TextView(MainActivity.this);
+            hint.setText(R.string.settings_hint);
+            hint.setTextColor(COLOR_MUTED);
+            hint.setTextSize(14);
+            hint.setLineSpacing(dp(2), 1f);
+            root.addView(hint, matchWrap());
+
+            addCategory(root, SETTINGS_SECTION_ACCOUNT, R.string.section_account, R.string.settings_account_summary);
+            addCategory(root, SETTINGS_SECTION_QUALITY, R.string.section_audio_quality, R.string.settings_quality_summary);
+            addCategory(root, SETTINGS_SECTION_CACHE, R.string.section_cache, R.string.settings_cache_summary);
+            addCategory(root, SETTINGS_SECTION_CLIPS, R.string.section_clip_playback, R.string.settings_clips_summary);
+            addCategory(root, SETTINGS_SECTION_SIDEBAR, R.string.section_sidebar, R.string.settings_sidebar_summary);
+            addCategory(root, SETTINGS_SECTION_EQUALIZER, R.string.section_equalizer, R.string.settings_equalizer_summary);
+            addCategory(root, SETTINGS_SECTION_SYSTEM, R.string.section_system, R.string.settings_system_summary);
+            addCategory(root, SETTINGS_SECTION_DIAGNOSTICS, R.string.section_diagnostics, R.string.settings_diagnostics_summary);
+
+            showScreen(scroll);
+            if (DeviceUi.isTelevision(MainActivity.this)) {
+                View target = categoryViews.get(lastSection);
+                if (target != null) {
+                    target.post(target::requestFocus);
+                }
+            }
+        }
+
+        private void addCategory(LinearLayout root, int section, int titleRes, int summaryRes) {
+            LinearLayout category = new LinearLayout(MainActivity.this);
+            category.setOrientation(LinearLayout.HORIZONTAL);
+            category.setGravity(Gravity.CENTER_VERTICAL);
+            category.setMinimumHeight(dp(70));
+            category.setPadding(dp(16), dp(11), dp(14), dp(11));
+            category.setBackground(panelBg(COLOR_SURFACE, dp(8), COLOR_STROKE));
+            category.setClickable(true);
+            category.setContentDescription(getString(titleRes));
+            category.setDescendantFocusability(ViewGroup.FOCUS_BLOCK_DESCENDANTS);
+            installInteractiveFeedback(category, dp(8));
+            category.setOnClickListener(v -> showSection(section, titleRes));
+
+            LinearLayout labels = new LinearLayout(MainActivity.this);
+            labels.setOrientation(LinearLayout.VERTICAL);
+            TextView categoryTitle = new TextView(MainActivity.this);
+            categoryTitle.setText(titleRes);
+            categoryTitle.setTextColor(COLOR_TEXT);
+            categoryTitle.setTextSize(17);
+            categoryTitle.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+            labels.addView(categoryTitle, matchWrap());
+            TextView summary = new TextView(MainActivity.this);
+            summary.setText(summaryRes);
+            summary.setTextColor(COLOR_MUTED);
+            summary.setTextSize(13);
+            summary.setMaxLines(2);
+            summary.setEllipsize(TextUtils.TruncateAt.END);
+            labels.addView(summary, matchWrap());
+            category.addView(labels, new LinearLayout.LayoutParams(
+                    0,
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    1f
+            ));
+
+            ImageView arrow = new ImageView(MainActivity.this);
+            arrow.setImageResource(R.drawable.ic_side_chevron_right);
+            arrow.setColorFilter(COLOR_TEXT);
+            arrow.setScaleType(ImageView.ScaleType.CENTER);
+            category.addView(arrow, new LinearLayout.LayoutParams(dp(34), dp(44)));
+
+            LinearLayout.LayoutParams params = matchWrap();
+            params.setMargins(0, dp(10), 0, 0);
+            root.addView(category, params);
+            categoryViews.put(section, category);
+        }
+
+        private void showSection(int section, int titleRes) {
+            currentSection = section;
+            lastSection = section;
+            clearSettingsSectionViews();
+            title.setText(titleRes);
+            back.setVisibility(View.VISIBLE);
+
+            ScrollView scroll = settingsScroll();
+            LinearLayout root = settingsContent();
+            scroll.addView(root, matchScroll());
+            switch (section) {
+                case SETTINGS_SECTION_ACCOUNT:
+                    addAccountSettings(root);
+                    break;
+                case SETTINGS_SECTION_QUALITY:
+                    addQualitySettings(root);
+                    break;
+                case SETTINGS_SECTION_CACHE:
+                    addCacheSettings(root);
+                    break;
+                case SETTINGS_SECTION_CLIPS:
+                    addClipPlaybackSettings(root);
+                    break;
+                case SETTINGS_SECTION_SIDEBAR:
+                    addSideBarSettings(root);
+                    break;
+                case SETTINGS_SECTION_EQUALIZER:
+                    addEqualizerSettings(root);
+                    break;
+                case SETTINGS_SECTION_SYSTEM:
+                    addSystemSettings(root);
+                    break;
+                case SETTINGS_SECTION_DIAGNOSTICS:
+                    addDiagnosticsSettings(root);
+                    break;
+                default:
+                    showIndex();
+                    return;
+            }
+            showScreen(scroll);
+            if (DeviceUi.isTelevision(MainActivity.this)) {
+                root.post(() -> requestFirstSettingsControl(root));
+            }
+        }
+
+        private ScrollView settingsScroll() {
+            ScrollView scroll = new ScrollView(MainActivity.this);
+            scroll.setFillViewport(true);
+            scroll.setClipToPadding(false);
+            scroll.setBackgroundColor(COLOR_BG);
+            return scroll;
+        }
+
+        private LinearLayout settingsContent() {
+            LinearLayout root = new LinearLayout(MainActivity.this);
+            root.setOrientation(LinearLayout.VERTICAL);
+            root.setPadding(dp(4), dp(12), dp(4), dp(24));
+            return root;
+        }
+
+        private void showScreen(ScrollView scroll) {
+            host.removeAllViews();
+            int screenWidth = getResources().getDisplayMetrics().widthPixels;
+            int width = isWideLayout()
+                    ? Math.min(dp(900), Math.max(dp(320), screenWidth - dp(72)))
+                    : ViewGroup.LayoutParams.MATCH_PARENT;
+            FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(
+                    width,
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    Gravity.TOP | Gravity.CENTER_HORIZONTAL
+            );
+            host.addView(scroll, params);
+        }
+    }
+
+    private void requestFirstSettingsControl(ViewGroup root) {
+        List<View> focusables = root.getFocusables(View.FOCUS_FORWARD);
+        for (View view : focusables) {
+            if (view.isEnabled() && (view instanceof Button
+                    || view instanceof CheckBox
+                    || view instanceof EditText)) {
+                view.requestFocus();
+                return;
+            }
+        }
+        if (!focusables.isEmpty()) {
+            focusables.get(0).requestFocus();
+        }
+    }
+
+    private void clearSettingsSectionViews() {
+        loginCodeView = null;
+        deviceLoginButton = null;
+        refreshDeviceCodeButton = null;
+        tokenEdit = null;
+        wifiOnlyBox = null;
+        chargingOnlyBox = null;
+        showTokenBox = null;
+        sidebarWatchdogBox = null;
+        sidebarAutoHideBox = null;
+        clipSystemBarsAutoHideBox = null;
+        autoCacheLikedBox = null;
+        streamQualityButton = null;
+        cacheQualityButton = null;
+        equalizerPackageEdit = null;
+    }
+
     private void addQualitySettings(LinearLayout root) {
-        addSection(root, R.string.section_audio_quality);
         TextView hint = new TextView(this);
         hint.setText(R.string.audio_quality_hint);
         hint.setTextColor(COLOR_MUTED);
@@ -2336,8 +2560,6 @@ public class MainActivity extends Activity {
     }
 
     private void addAccountSettings(LinearLayout root) {
-        addSection(root, R.string.section_account);
-
         TextView instruction = new TextView(this);
         instruction.setText(R.string.device_login_instruction);
         instruction.setTextColor(COLOR_TEXT);
@@ -2415,7 +2637,6 @@ public class MainActivity extends Activity {
     }
 
     private void addCacheSettings(LinearLayout root) {
-        addSection(root, R.string.section_cache);
         wifiOnlyBox = checkbox(R.string.wifi_only);
         wifiOnlyBox.setChecked(CacheSettings.isWifiOnly(this));
         wifiOnlyBox.setOnCheckedChangeListener((buttonView, isChecked) -> saveCacheSettings());
@@ -2442,7 +2663,6 @@ public class MainActivity extends Activity {
     }
 
     private void addClipPlaybackSettings(LinearLayout root) {
-        addSection(root, R.string.section_clip_playback);
         clipSystemBarsAutoHideBox = checkbox(R.string.clip_system_bars_auto_hide);
         boolean television = DeviceUi.isTelevision(this);
         clipSystemBarsAutoHideBox.setChecked(
@@ -2468,7 +2688,6 @@ public class MainActivity extends Activity {
     }
 
     private void addSideBarSettings(LinearLayout root) {
-        addSection(root, R.string.section_sidebar);
         sidebarWatchdogBox = checkbox(R.string.enable_embedded_sidebar);
         sidebarWatchdogBox.setChecked(YmpSettings.isEmbeddedSideBarEnabled(this));
         sidebarWatchdogBox.setOnCheckedChangeListener((buttonView, isChecked) -> {
@@ -2506,7 +2725,6 @@ public class MainActivity extends Activity {
     }
 
     private void addEqualizerSettings(LinearLayout root) {
-        addSection(root, R.string.section_equalizer);
         equalizerPackageEdit = new EditText(this);
         equalizerPackageEdit.setHint(R.string.equalizer_package_hint);
         equalizerPackageEdit.setText(YmpSettings.equalizerPackage(this));
@@ -2528,13 +2746,11 @@ public class MainActivity extends Activity {
     }
 
     private void addSystemSettings(LinearLayout root) {
-        addSection(root, R.string.section_system);
         addButton(root, R.string.open_battery_settings, v -> openBatterySettings());
         addButton(root, R.string.open_autostart_settings, v -> openAutostartSettings());
     }
 
     private void addDiagnosticsSettings(LinearLayout root) {
-        addSection(root, R.string.section_diagnostics);
         addButton(root, R.string.copy_diagnostics, v -> copyDiagnostics());
         addButton(root, R.string.save_diagnostics_file, v -> saveDiagnosticsToDownloads());
         addButton(root, R.string.clear_diagnostics, v -> clearDiagnostics());
@@ -3927,14 +4143,17 @@ public class MainActivity extends Activity {
             return;
         }
         boolean textInput = view instanceof EditText;
+        view.animate().cancel();
+        view.setScaleX(1f);
+        view.setScaleY(1f);
         view.setFocusable(true);
         view.setFocusableInTouchMode(textInput);
-        view.setOnFocusChangeListener((v, hasFocus) -> setInteractiveHighlight(v, hasFocus, radiusPx));
+        view.setOnFocusChangeListener((v, hasFocus) -> setInteractiveHighlight(v, hasFocus, false, radiusPx));
         view.setOnHoverListener((v, event) -> {
             if (event.getAction() == MotionEvent.ACTION_HOVER_ENTER) {
-                setInteractiveHighlight(v, true, radiusPx);
+                setInteractiveHighlight(v, true, false, radiusPx);
             } else if (event.getAction() == MotionEvent.ACTION_HOVER_EXIT && !v.hasFocus()) {
-                setInteractiveHighlight(v, false, radiusPx);
+                setInteractiveHighlight(v, false, false, radiusPx);
             }
             return false;
         });
@@ -3943,9 +4162,9 @@ public class MainActivity extends Activity {
                 return false;
             }
             if (event.getAction() == KeyEvent.ACTION_DOWN && event.getRepeatCount() == 0) {
-                animateInteractiveScale(v, textInput ? 1f : 0.94f);
+                setInteractiveHighlight(v, true, true, radiusPx);
             } else if (event.getAction() == KeyEvent.ACTION_UP) {
-                animateInteractiveScale(v, textInput ? 1f : v.hasFocus() ? 1.045f : 1f);
+                setInteractiveHighlight(v, v.hasFocus() || v.isHovered(), false, radiusPx);
             }
             return false;
         });
@@ -3954,32 +4173,28 @@ public class MainActivity extends Activity {
                 return false;
             }
             if (event.getAction() == MotionEvent.ACTION_DOWN) {
-                animateInteractiveScale(v, textInput ? 1f : 0.96f);
+                setInteractiveHighlight(v, true, true, radiusPx);
             } else if (event.getAction() == MotionEvent.ACTION_UP
                     || event.getAction() == MotionEvent.ACTION_CANCEL) {
-                animateInteractiveScale(v, textInput ? 1f : v.hasFocus() ? 1.045f : 1f);
+                setInteractiveHighlight(v, v.hasFocus() || v.isHovered(), false, radiusPx);
             }
             return false;
         });
     }
 
-    private void setInteractiveHighlight(View view, boolean highlighted, int radiusPx) {
-        if (highlighted) {
+    private void setInteractiveHighlight(View view, boolean highlighted, boolean pressed, int radiusPx) {
+        view.animate().cancel();
+        view.setScaleX(1f);
+        view.setScaleY(1f);
+        if (highlighted || pressed) {
             GradientDrawable ring = new GradientDrawable();
-            ring.setColor(Color.TRANSPARENT);
+            ring.setColor(Color.argb(pressed ? 96 : 28, 255, 255, 255));
             ring.setCornerRadius(radiusPx);
             ring.setStroke(dp(3), COLOR_TEXT);
             view.setForeground(ring);
         } else {
             view.setForeground(null);
         }
-        boolean textInput = view instanceof EditText;
-        animateInteractiveScale(view, highlighted && !textInput ? 1.045f : 1f);
-    }
-
-    private void animateInteractiveScale(View view, float scale) {
-        view.animate().cancel();
-        view.animate().scaleX(scale).scaleY(scale).setDuration(90L).start();
     }
 
     private boolean isActivationKey(int keyCode) {

@@ -75,7 +75,7 @@ public final class ClipWaveActivity extends Activity {
     private static final int COLOR_ACCENT = 0xffffd21f;
     private static final int COLOR_LIKE = 0xff35d6a5;
     private static final String MEDIA_ACTION_LIKE = "dev.petrov.yaplay.action.LIKE_CLIP";
-    private static final long OVERLAY_HIDE_DELAY_MS = 4_500L;
+    private static final long OVERLAY_HIDE_DELAY_MS = 5_000L;
     private static final long CLIP_INFO_HIDE_DELAY_MS = 5_000L;
     private static final long PROGRESS_UPDATE_INTERVAL_MS = 500L;
 
@@ -133,7 +133,8 @@ public final class ClipWaveActivity extends Activity {
     private ImageButton likeButton;
 
     private final Runnable hideOverlayRunnable = () -> {
-        if (overlayView != null && player != null && player.isPlaying()) {
+        if (overlayView != null && !progressDragging) {
+            overlayView.clearFocus();
             overlayView.setVisibility(View.GONE);
         }
     };
@@ -215,15 +216,21 @@ public final class ClipWaveActivity extends Activity {
     @Override
     public boolean dispatchKeyEvent(KeyEvent event) {
         int keyCode = event.getKeyCode();
+        if (keyCode == KeyEvent.KEYCODE_BACK && hasVisibleOverlay()) {
+            if (event.getAction() == KeyEvent.ACTION_UP) {
+                hideControlAndInfoOverlays();
+            }
+            return true;
+        }
         if (isRemoteNavigationKey(keyCode) && event.getAction() == KeyEvent.ACTION_DOWN) {
             if (overlayView != null && overlayView.getVisibility() != View.VISIBLE) {
-                showOverlay(false);
+                showOverlay(true);
                 if (playPauseButton != null) {
                     playPauseButton.post(playPauseButton::requestFocus);
                 }
                 return true;
             }
-            mainHandler.removeCallbacks(hideOverlayRunnable);
+            scheduleOverlayHide();
             if (getCurrentFocus() == null && playPauseButton != null) {
                 playPauseButton.requestFocus();
             }
@@ -298,7 +305,7 @@ public final class ClipWaveActivity extends Activity {
                 } else if (player != null
                         && player.getPlaybackState() != Player.STATE_BUFFERING
                         && player.getPlaybackState() != Player.STATE_ENDED) {
-                    showOverlay(false);
+                    showOverlay(true);
                 }
                 updateClipProgress();
                 updateControls();
@@ -336,7 +343,7 @@ public final class ClipWaveActivity extends Activity {
             public void onPlayerError(PlaybackException error) {
                 Diagnostics.log(ClipWaveActivity.this, "YMP Clip Wave playback failed", error);
                 showStatus(getString(R.string.clip_wave_playback_failed, readableError(error)));
-                showOverlay(false);
+                showOverlay(true);
                 if (!recoveringFromError) {
                     recoveringFromError = true;
                     mainHandler.postDelayed(() -> requestAdvance(false), 1_200L);
@@ -434,7 +441,7 @@ public final class ClipWaveActivity extends Activity {
         updateClipProgress();
         if (currentClip != null && player != null && !player.isPlaying()
                 && player.getPlaybackState() != Player.STATE_BUFFERING) {
-            showOverlay(false);
+            showOverlay(true);
         } else if (pendingNowPlayingOverlay) {
             showPendingNowPlayingOverlay();
         } else if (currentClip != null) {
@@ -523,7 +530,7 @@ public final class ClipWaveActivity extends Activity {
         overlayView.addView(close, closeParams);
 
         LinearLayout bottom = new LinearLayout(this);
-        bottom.setOrientation(wide ? LinearLayout.HORIZONTAL : LinearLayout.VERTICAL);
+        bottom.setOrientation(LinearLayout.VERTICAL);
         bottom.setGravity(Gravity.CENTER_VERTICAL);
         bottom.setPadding(dp(wide ? 24 : 18), dp(16), dp(wide ? 24 : 18), dp(18));
         bottom.setBackground(roundBackground(COLOR_PANEL, dp(8), 0x00334453));
@@ -535,10 +542,15 @@ public final class ClipWaveActivity extends Activity {
         bottomParams.setMargins(dp(wide ? 18 : 10), 0, dp(wide ? 18 : 10), dp(wide ? 16 : 10));
         overlayView.addView(bottom, bottomParams);
 
+        LinearLayout content = new LinearLayout(this);
+        content.setOrientation(wide ? LinearLayout.HORIZONTAL : LinearLayout.VERTICAL);
+        content.setGravity(Gravity.CENTER_VERTICAL);
+        bottom.addView(content, matchWrap());
+
         LinearLayout info = new LinearLayout(this);
         info.setOrientation(LinearLayout.VERTICAL);
         info.setGravity(Gravity.CENTER_VERTICAL);
-        bottom.addView(info, wide
+        content.addView(info, wide
                 ? new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
                 : matchWrap());
 
@@ -565,18 +577,17 @@ public final class ClipWaveActivity extends Activity {
         info.addView(artistView, matchWrap());
 
         LinearLayout progressRow = new LinearLayout(this);
-        progressRow.setOrientation(LinearLayout.HORIZONTAL);
-        progressRow.setGravity(Gravity.CENTER_VERTICAL);
+        progressRow.setOrientation(LinearLayout.VERTICAL);
         LinearLayout.LayoutParams progressRowParams = matchWrap();
-        progressRowParams.setMargins(0, dp(8), 0, 0);
-        info.addView(progressRow, progressRowParams);
+        progressRowParams.setMargins(0, 0, 0, dp(8));
+        bottom.addView(progressRow, 0, progressRowParams);
 
         clipProgressView = new SeekBar(this);
         clipProgressView.setMax(1_000);
         clipProgressView.setProgressTintList(ColorStateList.valueOf(COLOR_ACCENT));
         clipProgressView.setProgressBackgroundTintList(ColorStateList.valueOf(0xff43515c));
         clipProgressView.setThumbTintList(ColorStateList.valueOf(COLOR_ACCENT));
-        clipProgressView.setPadding(0, 0, dp(10), 0);
+        clipProgressView.setPadding(0, 0, 0, 0);
         installInteractiveFeedback(clipProgressView, dp(10));
         clipProgressView.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
@@ -603,9 +614,8 @@ public final class ClipWaveActivity extends Activity {
             }
         });
         progressRow.addView(clipProgressView, new LinearLayout.LayoutParams(
-                0,
-                dp(36),
-                1f
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                dp(34)
         ));
 
         clipTimeView = new TextView(this);
@@ -614,7 +624,10 @@ public final class ClipWaveActivity extends Activity {
         clipTimeView.setTextSize(12);
         clipTimeView.setGravity(Gravity.END | Gravity.CENTER_VERTICAL);
         clipTimeView.setSingleLine(true);
-        progressRow.addView(clipTimeView, new LinearLayout.LayoutParams(dp(108), dp(36)));
+        progressRow.addView(clipTimeView, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                dp(22)
+        ));
 
         statusView = new TextView(this);
         statusView.setTextColor(0xff8296a5);
@@ -630,7 +643,7 @@ public final class ClipWaveActivity extends Activity {
         controls.setGravity(Gravity.CENTER);
         LinearLayout.LayoutParams controlsParams = wrapWrap();
         controlsParams.setMargins(wide ? dp(20) : 0, wide ? 0 : dp(14), 0, 0);
-        bottom.addView(controls, controlsParams);
+        content.addView(controls, controlsParams);
 
         int side = wide ? dp(68) : dp(60);
         int play = wide ? dp(82) : dp(72);
@@ -979,7 +992,7 @@ public final class ClipWaveActivity extends Activity {
     private void playPreviousClip() {
         if (history.isEmpty() || currentClip == null) {
             showStatus(getString(R.string.clip_wave_no_previous));
-            showOverlay(false);
+            showOverlay(true);
             return;
         }
         ClipWaveClient.Clip old = currentClip;
@@ -1028,7 +1041,7 @@ public final class ClipWaveActivity extends Activity {
                     nextLoading = false;
                     showStatus(getString(R.string.clip_wave_next_failed, readableError(ex)));
                     hideLoading();
-                    showOverlay(false);
+                    showOverlay(true);
                 });
             }
         });
@@ -1170,7 +1183,7 @@ public final class ClipWaveActivity extends Activity {
         YandexMusicClient.Track track = currentTrack;
         if (clip == null || track == null || !likedKeysLoaded) {
             showStatus(getString(R.string.clip_wave_like_wait));
-            showOverlay(false);
+            showOverlay(true);
             return;
         }
         boolean remove = likedTrackKeys.contains(track.key);
@@ -1382,7 +1395,7 @@ public final class ClipWaveActivity extends Activity {
     }
 
     private void togglePlayback() {
-        showOverlay(false);
+        showOverlay(true);
         if (player == null) {
             return;
         }
@@ -1399,6 +1412,7 @@ public final class ClipWaveActivity extends Activity {
         }
         if (overlayView.getVisibility() == View.VISIBLE) {
             mainHandler.removeCallbacks(hideOverlayRunnable);
+            overlayView.clearFocus();
             overlayView.setVisibility(View.GONE);
         } else {
             showOverlay(true);
@@ -1414,16 +1428,30 @@ public final class ClipWaveActivity extends Activity {
         }
         mainHandler.removeCallbacks(hideClipInfoRunnable);
         overlayView.setVisibility(View.VISIBLE);
+        if (scheduleHide) {
+            scheduleOverlayHide();
+        } else {
+            mainHandler.removeCallbacks(hideOverlayRunnable);
+        }
+    }
+
+    private void scheduleOverlayHide() {
         mainHandler.removeCallbacks(hideOverlayRunnable);
-        if (scheduleHide && player != null && player.isPlaying()) {
+        if (!progressDragging) {
             mainHandler.postDelayed(hideOverlayRunnable, OVERLAY_HIDE_DELAY_MS);
         }
+    }
+
+    private boolean hasVisibleOverlay() {
+        return (overlayView != null && overlayView.getVisibility() == View.VISIBLE)
+                || (clipInfoOverlayView != null && clipInfoOverlayView.getVisibility() == View.VISIBLE);
     }
 
     private void hideControlAndInfoOverlays() {
         mainHandler.removeCallbacks(hideOverlayRunnable);
         mainHandler.removeCallbacks(hideClipInfoRunnable);
         if (overlayView != null) {
+            overlayView.clearFocus();
             overlayView.setVisibility(View.GONE);
         }
         if (clipInfoOverlayView != null) {
@@ -1537,7 +1565,7 @@ public final class ClipWaveActivity extends Activity {
 
     private void showFatalError(String message) {
         showLoading(message);
-        showOverlay(false);
+        showOverlay(true);
         if (playPauseButton != null) {
             playPauseButton.setEnabled(false);
         }
@@ -1709,31 +1737,17 @@ public final class ClipWaveActivity extends Activity {
 
     @SuppressLint("ClickableViewAccessibility")
     private void installInteractiveFeedback(View view, int radiusPx) {
+        view.animate().cancel();
+        view.setScaleX(1f);
+        view.setScaleY(1f);
         view.setFocusable(true);
         view.setFocusableInTouchMode(false);
-        view.setOnFocusChangeListener((v, focused) -> {
-            if (focused) {
-                GradientDrawable ring = new GradientDrawable();
-                ring.setColor(Color.TRANSPARENT);
-                ring.setCornerRadius(radiusPx);
-                ring.setStroke(dp(3), COLOR_TEXT);
-                v.setForeground(ring);
-            } else {
-                v.setForeground(null);
-            }
-            animateInteractiveScale(v, focused ? 1.06f : 1f);
-        });
+        view.setOnFocusChangeListener((v, focused) -> setInteractiveHighlight(v, focused, false, radiusPx));
         view.setOnHoverListener((v, event) -> {
             if (event.getAction() == MotionEvent.ACTION_HOVER_ENTER) {
-                GradientDrawable ring = new GradientDrawable();
-                ring.setColor(Color.TRANSPARENT);
-                ring.setCornerRadius(radiusPx);
-                ring.setStroke(dp(3), COLOR_TEXT);
-                v.setForeground(ring);
-                animateInteractiveScale(v, 1.06f);
+                setInteractiveHighlight(v, true, false, radiusPx);
             } else if (event.getAction() == MotionEvent.ACTION_HOVER_EXIT && !v.hasFocus()) {
-                v.setForeground(null);
-                animateInteractiveScale(v, 1f);
+                setInteractiveHighlight(v, false, false, radiusPx);
             }
             return false;
         });
@@ -1742,9 +1756,10 @@ public final class ClipWaveActivity extends Activity {
                 return false;
             }
             if (event.getAction() == KeyEvent.ACTION_DOWN && event.getRepeatCount() == 0) {
-                animateInteractiveScale(v, 0.94f);
+                scheduleOverlayHide();
+                setInteractiveHighlight(v, true, true, radiusPx);
             } else if (event.getAction() == KeyEvent.ACTION_UP) {
-                animateInteractiveScale(v, v.hasFocus() ? 1.06f : 1f);
+                setInteractiveHighlight(v, v.hasFocus() || v.isHovered(), false, radiusPx);
             }
             return false;
         });
@@ -1753,18 +1768,29 @@ public final class ClipWaveActivity extends Activity {
                 return false;
             }
             if (event.getAction() == MotionEvent.ACTION_DOWN) {
-                animateInteractiveScale(v, 0.96f);
+                scheduleOverlayHide();
+                setInteractiveHighlight(v, true, true, radiusPx);
             } else if (event.getAction() == MotionEvent.ACTION_UP
                     || event.getAction() == MotionEvent.ACTION_CANCEL) {
-                animateInteractiveScale(v, v.hasFocus() ? 1.06f : 1f);
+                setInteractiveHighlight(v, v.hasFocus() || v.isHovered(), false, radiusPx);
             }
             return false;
         });
     }
 
-    private void animateInteractiveScale(View view, float scale) {
+    private void setInteractiveHighlight(View view, boolean highlighted, boolean pressed, int radiusPx) {
         view.animate().cancel();
-        view.animate().scaleX(scale).scaleY(scale).setDuration(90L).start();
+        view.setScaleX(1f);
+        view.setScaleY(1f);
+        if (highlighted || pressed) {
+            GradientDrawable ring = new GradientDrawable();
+            ring.setColor(Color.argb(pressed ? 96 : 28, 255, 255, 255));
+            ring.setCornerRadius(radiusPx);
+            ring.setStroke(dp(3), COLOR_TEXT);
+            view.setForeground(ring);
+        } else {
+            view.setForeground(null);
+        }
     }
 
     private boolean isActivationKey(int keyCode) {
