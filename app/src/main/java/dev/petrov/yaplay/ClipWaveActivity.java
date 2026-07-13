@@ -1,5 +1,6 @@
 package dev.petrov.yaplay;
 
+import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.app.PendingIntent;
 import android.content.Intent;
@@ -20,6 +21,8 @@ import android.os.Looper;
 import android.os.SystemClock;
 import android.text.TextUtils;
 import android.view.Gravity;
+import android.view.KeyEvent;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.Window;
@@ -109,6 +112,7 @@ public final class ClipWaveActivity extends Activity {
     private boolean pendingPlayerTransitionFinished;
     private float pendingPlayerTransitionPlayedSeconds;
     private boolean progressDragging;
+    private boolean televisionSystemBarsRestored;
     private int playbackGeneration;
     private String startedFeedbackClipId = "";
 
@@ -193,11 +197,38 @@ public final class ClipWaveActivity extends Activity {
     }
 
     @Override
+    protected void onPause() {
+        if (DeviceUi.isTelevision(this)) {
+            showSystemBars();
+        }
+        super.onPause();
+    }
+
+    @Override
     public void onWindowFocusChanged(boolean hasFocus) {
         super.onWindowFocusChanged(hasFocus);
         if (hasFocus) {
             applySystemBarsPreference();
         }
+    }
+
+    @Override
+    public boolean dispatchKeyEvent(KeyEvent event) {
+        int keyCode = event.getKeyCode();
+        if (isRemoteNavigationKey(keyCode) && event.getAction() == KeyEvent.ACTION_DOWN) {
+            if (overlayView != null && overlayView.getVisibility() != View.VISIBLE) {
+                showOverlay(false);
+                if (playPauseButton != null) {
+                    playPauseButton.post(playPauseButton::requestFocus);
+                }
+                return true;
+            }
+            mainHandler.removeCallbacks(hideOverlayRunnable);
+            if (getCurrentFocus() == null && playPauseButton != null) {
+                playPauseButton.requestFocus();
+            }
+        }
+        return super.dispatchKeyEvent(event);
     }
 
     @Override
@@ -546,6 +577,7 @@ public final class ClipWaveActivity extends Activity {
         clipProgressView.setProgressBackgroundTintList(ColorStateList.valueOf(0xff43515c));
         clipProgressView.setThumbTintList(ColorStateList.valueOf(COLOR_ACCENT));
         clipProgressView.setPadding(0, 0, dp(10), 0);
+        installInteractiveFeedback(clipProgressView, dp(10));
         clipProgressView.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
@@ -1522,6 +1554,10 @@ public final class ClipWaveActivity extends Activity {
     }
 
     private void enterImmersiveMode() {
+        if (DeviceUi.isTelevision(this)) {
+            showSystemBars();
+            return;
+        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             WindowInsetsController controller = getWindow().getInsetsController();
             if (controller != null) {
@@ -1548,6 +1584,14 @@ public final class ClipWaveActivity extends Activity {
     }
 
     private void applySystemBarsPreference() {
+        if (DeviceUi.isTelevision(this)) {
+            if (!televisionSystemBarsRestored) {
+                showSystemBars();
+                televisionSystemBarsRestored = true;
+                Diagnostics.log(this, "YMP Clip Wave system-bar hiding bypassed on Android TV");
+            }
+            return;
+        }
         if (YmpSettings.isClipSystemBarsAutoHideEnabled(this)) {
             enterImmersiveMode();
         } else {
@@ -1557,6 +1601,7 @@ public final class ClipWaveActivity extends Activity {
 
     @SuppressWarnings("deprecation")
     private void showSystemBars() {
+        getWindow().clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             WindowInsetsController controller = getWindow().getInsetsController();
             if (controller != null) {
@@ -1658,7 +1703,83 @@ public final class ClipWaveActivity extends Activity {
         button.setContentDescription(description);
         button.setMinimumWidth(size);
         button.setMinimumHeight(size);
+        installInteractiveFeedback(button, dp(999));
         return button;
+    }
+
+    @SuppressLint("ClickableViewAccessibility")
+    private void installInteractiveFeedback(View view, int radiusPx) {
+        view.setFocusable(true);
+        view.setFocusableInTouchMode(false);
+        view.setOnFocusChangeListener((v, focused) -> {
+            if (focused) {
+                GradientDrawable ring = new GradientDrawable();
+                ring.setColor(Color.TRANSPARENT);
+                ring.setCornerRadius(radiusPx);
+                ring.setStroke(dp(3), COLOR_TEXT);
+                v.setForeground(ring);
+            } else {
+                v.setForeground(null);
+            }
+            animateInteractiveScale(v, focused ? 1.06f : 1f);
+        });
+        view.setOnHoverListener((v, event) -> {
+            if (event.getAction() == MotionEvent.ACTION_HOVER_ENTER) {
+                GradientDrawable ring = new GradientDrawable();
+                ring.setColor(Color.TRANSPARENT);
+                ring.setCornerRadius(radiusPx);
+                ring.setStroke(dp(3), COLOR_TEXT);
+                v.setForeground(ring);
+                animateInteractiveScale(v, 1.06f);
+            } else if (event.getAction() == MotionEvent.ACTION_HOVER_EXIT && !v.hasFocus()) {
+                v.setForeground(null);
+                animateInteractiveScale(v, 1f);
+            }
+            return false;
+        });
+        view.setOnKeyListener((v, keyCode, event) -> {
+            if (!isActivationKey(keyCode) || !v.isEnabled()) {
+                return false;
+            }
+            if (event.getAction() == KeyEvent.ACTION_DOWN && event.getRepeatCount() == 0) {
+                animateInteractiveScale(v, 0.94f);
+            } else if (event.getAction() == KeyEvent.ACTION_UP) {
+                animateInteractiveScale(v, v.hasFocus() ? 1.06f : 1f);
+            }
+            return false;
+        });
+        view.setOnTouchListener((v, event) -> {
+            if (!v.isEnabled()) {
+                return false;
+            }
+            if (event.getAction() == MotionEvent.ACTION_DOWN) {
+                animateInteractiveScale(v, 0.96f);
+            } else if (event.getAction() == MotionEvent.ACTION_UP
+                    || event.getAction() == MotionEvent.ACTION_CANCEL) {
+                animateInteractiveScale(v, v.hasFocus() ? 1.06f : 1f);
+            }
+            return false;
+        });
+    }
+
+    private void animateInteractiveScale(View view, float scale) {
+        view.animate().cancel();
+        view.animate().scaleX(scale).scaleY(scale).setDuration(90L).start();
+    }
+
+    private boolean isActivationKey(int keyCode) {
+        return keyCode == KeyEvent.KEYCODE_DPAD_CENTER
+                || keyCode == KeyEvent.KEYCODE_ENTER
+                || keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER
+                || keyCode == KeyEvent.KEYCODE_SPACE;
+    }
+
+    private boolean isRemoteNavigationKey(int keyCode) {
+        return keyCode == KeyEvent.KEYCODE_DPAD_LEFT
+                || keyCode == KeyEvent.KEYCODE_DPAD_RIGHT
+                || keyCode == KeyEvent.KEYCODE_DPAD_UP
+                || keyCode == KeyEvent.KEYCODE_DPAD_DOWN
+                || isActivationKey(keyCode);
     }
 
     private GradientDrawable roundBackground(int color, int radius, int stroke) {

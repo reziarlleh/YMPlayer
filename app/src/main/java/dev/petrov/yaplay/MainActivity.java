@@ -30,6 +30,7 @@ import android.text.Selection;
 import android.text.TextUtils;
 import android.text.method.PasswordTransformationMethod;
 import android.view.Gravity;
+import android.view.KeyEvent;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputMethodManager;
 import android.view.MotionEvent;
@@ -94,6 +95,8 @@ public class MainActivity extends Activity {
     private LinearLayout libraryPlaylistsView;
     private LinearLayout localPlaylistsView;
     private TextView libraryStatusView;
+    private Button libraryPlayerButton;
+    private Button librarySearchButton;
     private Button waveSourceButton;
     private Button offlineSourceButton;
     private Button playlistSourceButton;
@@ -105,7 +108,11 @@ public class MainActivity extends Activity {
     private ImageButton dislikeButton;
     private ImageButton addToPlaylistButton;
     private ImageButton sidebarToggleButton;
+    private ImageButton libraryNavigationButton;
     private TextView loginCodeView;
+    private TextView settingsFeedbackView;
+    private Button deviceLoginButton;
+    private Button refreshDeviceCodeButton;
     private EditText tokenEdit;
     private CheckBox wifiOnlyBox;
     private CheckBox chargingOnlyBox;
@@ -120,6 +127,7 @@ public class MainActivity extends Activity {
     private BroadcastReceiver cacheStatusReceiver;
     private BroadcastReceiver playerStatusReceiver;
     private volatile boolean polling;
+    private volatile boolean deviceCodeLoading;
     private volatile boolean libraryLoading;
     private boolean libraryLoaded;
     private final List<YandexMusicClient.PlaylistSummary> cachedPlaylists = new ArrayList<>();
@@ -127,6 +135,9 @@ public class MainActivity extends Activity {
     private volatile String cachedCacheStatus = "Cache status loading...";
     private volatile boolean cacheStatusLoading;
     private String latestDeviceCode = "";
+    private volatile YandexMusicClient.DeviceCode pendingDeviceCode;
+    private volatile long pendingDeviceCodeExpiresAtMs;
+    private int deviceCodeGeneration;
     private String latestCoverUrl = "";
     private boolean latestCoverLoaded;
     private boolean latestCoverLoading;
@@ -154,6 +165,9 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(buildContent());
+        if (DeviceUi.isTelevision(this) && playPauseButton != null) {
+            playPauseButton.post(playPauseButton::requestFocus);
+        }
         requestNotificationPermissionIfNeeded();
         Diagnostics.log(this, "YMPlayer MainActivity opened");
         updateStatus(statusWithCache("Ready"));
@@ -285,9 +299,9 @@ public class MainActivity extends Activity {
         title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         top.addView(title, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
 
-        Button player = smallButton(getString(R.string.player_page), COLOR_SURFACE_2, COLOR_TEXT);
-        player.setOnClickListener(v -> showPlayerPage());
-        top.addView(player, compactButtonParams(dp(118)));
+        libraryPlayerButton = smallButton(getString(R.string.player_page), COLOR_SURFACE_2, COLOR_TEXT);
+        libraryPlayerButton.setOnClickListener(v -> showPlayerPage());
+        top.addView(libraryPlayerButton, compactButtonParams(dp(118)));
 
         libraryStatusView = new TextView(this);
         libraryStatusView.setText(R.string.library_status_ready);
@@ -297,11 +311,11 @@ public class MainActivity extends Activity {
         libraryStatusView.setBackground(panelBg(0xff0d141b, dp(12), 0xff1d2b36));
         root.addView(libraryStatusView, matchWrap());
 
-        Button search = controlButton(getString(R.string.search_music), COLOR_ACCENT, COLOR_BG, 52);
-        search.setOnClickListener(v -> showSearchEntry());
+        librarySearchButton = controlButton(getString(R.string.search_music), COLOR_ACCENT, COLOR_BG, 52);
+        librarySearchButton.setOnClickListener(v -> showSearchEntry());
         LinearLayout.LayoutParams searchParams = matchWrap();
         searchParams.setMargins(0, dp(10), 0, dp(4));
-        root.addView(search, searchParams);
+        root.addView(librarySearchButton, searchParams);
 
         addSection(root, R.string.section_my_playlists);
         libraryPlaylistsView = new LinearLayout(this);
@@ -325,6 +339,7 @@ public class MainActivity extends Activity {
         item.setBackground(panelBg(COLOR_SURFACE_2, dp(12), COLOR_STROKE));
         item.setClickable(true);
         item.setOnClickListener(v -> action.run());
+        installInteractiveFeedback(item, dp(12));
 
         TextView titleView = new TextView(this);
         titleView.setText(title);
@@ -415,7 +430,13 @@ public class MainActivity extends Activity {
         if (libraryPageView != null) {
             libraryPageView.setVisibility(View.VISIBLE);
         }
+        if (libraryNavigationButton != null) {
+            libraryNavigationButton.setColorFilter(COLOR_ACCENT);
+        }
         loadLibraryIfNeeded();
+        if (DeviceUi.isTelevision(this) && librarySearchButton != null) {
+            librarySearchButton.post(librarySearchButton::requestFocus);
+        }
     }
 
     private void showPlayerPage() {
@@ -424,6 +445,12 @@ public class MainActivity extends Activity {
         }
         if (playerPageView != null) {
             playerPageView.setVisibility(View.VISIBLE);
+        }
+        if (libraryNavigationButton != null) {
+            libraryNavigationButton.setColorFilter(COLOR_TEXT);
+        }
+        if (DeviceUi.isTelevision(this) && playPauseButton != null) {
+            playPauseButton.post(playPauseButton::requestFocus);
         }
     }
 
@@ -746,6 +773,7 @@ public class MainActivity extends Activity {
         title.setHintTextColor(COLOR_MUTED);
         title.setBackground(panelBg(COLOR_SURFACE_2, dp(10), COLOR_STROKE));
         title.setPadding(dp(12), 0, dp(12), 0);
+        installInteractiveFeedback(title, dp(10));
         root.addView(title, spaced());
 
         Button save = controlButton(getString(R.string.rename_playlist), COLOR_ACCENT, COLOR_BG, 52);
@@ -975,6 +1003,7 @@ public class MainActivity extends Activity {
         title.setHintTextColor(COLOR_MUTED);
         title.setBackground(panelBg(COLOR_SURFACE_2, dp(10), COLOR_STROKE));
         title.setPadding(dp(12), 0, dp(12), 0);
+        installInteractiveFeedback(title, dp(10));
         root.addView(title, spaced());
 
         Button create = controlButton(getString(R.string.create_local_playlist), COLOR_ACCENT, COLOR_BG, 52);
@@ -1015,6 +1044,7 @@ public class MainActivity extends Activity {
         title.setHintTextColor(COLOR_MUTED);
         title.setBackground(panelBg(COLOR_SURFACE_2, dp(10), COLOR_STROKE));
         title.setPadding(dp(12), 0, dp(12), 0);
+        installInteractiveFeedback(title, dp(10));
         root.addView(title, spaced());
 
         Button create = controlButton(getString(R.string.create_yandex_playlist_and_add), COLOR_ACCENT, COLOR_BG, 52);
@@ -1083,6 +1113,7 @@ public class MainActivity extends Activity {
         title.setHintTextColor(COLOR_MUTED);
         title.setBackground(panelBg(COLOR_SURFACE_2, dp(10), COLOR_STROKE));
         title.setPadding(dp(12), 0, dp(12), 0);
+        installInteractiveFeedback(title, dp(10));
         root.addView(title, spaced());
 
         Button create = controlButton(getString(R.string.create_yandex_playlist_and_add), COLOR_ACCENT, COLOR_BG, 52);
@@ -1320,6 +1351,7 @@ public class MainActivity extends Activity {
         box.setSingleLine(true);
         box.setEllipsize(TextUtils.TruncateAt.END);
         box.setButtonTintList(android.content.res.ColorStateList.valueOf(COLOR_ACCENT));
+        installInteractiveFeedback(box, dp(10));
         String key = item.directory ? item.asFolderTreeUri().toString() : item.uri.toString();
         box.setChecked(item.directory
                 ? state.selectedFolders.containsKey(key)
@@ -1643,6 +1675,7 @@ public class MainActivity extends Activity {
         query.setTextSize(16);
         query.setBackgroundColor(Color.TRANSPARENT);
         query.setPadding(0, 0, dp(10), 0);
+        installInteractiveFeedback(query, dp(20));
         searchBar.addView(query, new LinearLayout.LayoutParams(0, dp(48), 1f));
 
         LinearLayout results = new LinearLayout(this);
@@ -1839,6 +1872,7 @@ public class MainActivity extends Activity {
         item.setBackground(panelBg(COLOR_SURFACE_2, dp(8), COLOR_STROKE));
         item.setMinimumHeight(dp(76));
         item.setOnClickListener(v -> primaryAction.run());
+        installInteractiveFeedback(item, dp(8));
 
         ImageView thumb = new ImageView(this);
         thumb.setImageResource(R.mipmap.ic_launcher);
@@ -1925,6 +1959,10 @@ public class MainActivity extends Activity {
     }
 
     private void addTopBar(LinearLayout root) {
+        boolean wide = isWideLayout();
+        int logoSize = dp(wide ? 52 : 46);
+        int actionSize = dp(wide ? 52 : 48);
+        int actionContentSize = dp(wide ? 46 : 42);
         LinearLayout top = row();
         top.setGravity(Gravity.CENTER_VERTICAL);
         root.addView(top, matchWrap());
@@ -1936,8 +1974,9 @@ public class MainActivity extends Activity {
         logo.setBackgroundColor(Color.TRANSPARENT);
         logo.setContentDescription(getString(R.string.open_about));
         logo.setOnClickListener(v -> showAboutDialog());
-        LinearLayout.LayoutParams logoParams = new LinearLayout.LayoutParams(dp(52), dp(52));
-        logoParams.setMargins(0, 0, dp(12), 0);
+        installInteractiveFeedback(logo, dp(12));
+        LinearLayout.LayoutParams logoParams = new LinearLayout.LayoutParams(logoSize, logoSize);
+        logoParams.setMargins(0, 0, dp(wide ? 12 : 8), 0);
         top.addView(logo, logoParams);
 
         LinearLayout titleBox = new LinearLayout(this);
@@ -1947,7 +1986,7 @@ public class MainActivity extends Activity {
         TextView title = new TextView(this);
         title.setText(R.string.main_title);
         title.setTextColor(COLOR_TEXT);
-        title.setTextSize(isWideLayout() ? 28 : 30);
+        title.setTextSize(wide ? 28 : 26);
         title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         title.setSingleLine(true);
         title.setEllipsize(TextUtils.TruncateAt.END);
@@ -1956,24 +1995,34 @@ public class MainActivity extends Activity {
         TextView subtitle = new TextView(this);
         subtitle.setText(R.string.main_subtitle);
         subtitle.setTextColor(COLOR_MUTED);
-        subtitle.setTextSize(13);
+        subtitle.setTextSize(wide ? 13 : 12);
         subtitle.setSingleLine(true);
         subtitle.setEllipsize(TextUtils.TruncateAt.END);
         titleBox.addView(subtitle, matchWrap());
 
-        sidebarToggleButton = smallIconButton(R.drawable.ic_player_sidebar, COLOR_SURFACE_2, COLOR_TEXT, dp(46), getString(R.string.sidebar_quick_toggle));
+        sidebarToggleButton = smallIconButton(R.drawable.ic_player_sidebar, COLOR_SURFACE_2, COLOR_TEXT, actionContentSize, getString(R.string.sidebar_quick_toggle));
         sidebarToggleButton.setOnClickListener(v -> toggleEmbeddedSideBar());
-        top.addView(sidebarToggleButton, compactButtonParams(dp(52)));
+        top.addView(sidebarToggleButton, compactButtonParams(actionSize));
+
+        libraryNavigationButton = smallIconButton(
+                android.R.drawable.ic_menu_search,
+                COLOR_SURFACE_2,
+                COLOR_TEXT,
+                actionContentSize,
+                getString(R.string.open_search_and_playlists)
+        );
+        libraryNavigationButton.setOnClickListener(v -> showLibraryPage());
+        top.addView(libraryNavigationButton, compactButtonParams(actionSize));
 
         ImageButton settings = smallIconButton(
                 android.R.drawable.ic_menu_preferences,
                 COLOR_SURFACE_2,
                 COLOR_TEXT,
-                dp(46),
+                actionContentSize,
                 getString(R.string.settings_menu)
         );
         settings.setOnClickListener(v -> showSettingsDialog());
-        top.addView(settings, compactButtonParams(dp(52)));
+        top.addView(settings, compactButtonParams(actionSize));
     }
 
     private void showAboutDialog() {
@@ -2220,6 +2269,15 @@ public class MainActivity extends Activity {
         hintParams.setMargins(0, dp(6), 0, 0);
         root.addView(hint, hintParams);
 
+        settingsFeedbackView = new TextView(this);
+        settingsFeedbackView.setTextColor(COLOR_TEXT);
+        settingsFeedbackView.setTextSize(14);
+        settingsFeedbackView.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        settingsFeedbackView.setPadding(dp(13), dp(10), dp(13), dp(10));
+        settingsFeedbackView.setBackground(panelBg(0xff17362f, dp(10), 0xff2a7463));
+        settingsFeedbackView.setVisibility(View.GONE);
+        root.addView(settingsFeedbackView, spaced());
+
         addAccountSettings(root);
         addQualitySettings(root);
         addCacheSettings(root);
@@ -2243,6 +2301,12 @@ public class MainActivity extends Activity {
                         WindowManager.LayoutParams.WRAP_CONTENT
                 );
             }
+        });
+        dialog.setOnDismissListener(d -> {
+            settingsFeedbackView = null;
+            loginCodeView = null;
+            deviceLoginButton = null;
+            refreshDeviceCodeButton = null;
         });
         dialog.show();
     }
@@ -2273,23 +2337,49 @@ public class MainActivity extends Activity {
 
     private void addAccountSettings(LinearLayout root) {
         addSection(root, R.string.section_account);
-        Button login = pillButton(getString(R.string.start_device_login), COLOR_ACCENT, COLOR_BG);
-        login.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-        login.setOnClickListener(v -> startDeviceLogin());
-        root.addView(login, spaced());
+
+        TextView instruction = new TextView(this);
+        instruction.setText(R.string.device_login_instruction);
+        instruction.setTextColor(COLOR_TEXT);
+        instruction.setTextSize(15);
+        instruction.setLineSpacing(dp(2), 1f);
+        root.addView(instruction, spaced());
 
         loginCodeView = new TextView(this);
-        loginCodeView.setText(latestDeviceCode.isEmpty()
+        loginCodeView.setText(deviceCodeLoading
+                ? getString(R.string.device_login_code_loading)
+                : latestDeviceCode.isEmpty()
                 ? getString(R.string.login_code_empty)
                 : getString(R.string.login_code_template, latestDeviceCode));
         loginCodeView.setTextColor(COLOR_ACCENT);
         loginCodeView.setTextSize(22);
         loginCodeView.setTypeface(Typeface.MONOSPACE, Typeface.BOLD);
-        loginCodeView.setGravity(Gravity.CENTER_HORIZONTAL);
+        loginCodeView.setGravity(Gravity.CENTER);
         loginCodeView.setTextIsSelectable(true);
-        loginCodeView.setPadding(0, dp(6), 0, dp(8));
+        loginCodeView.setMinHeight(dp(62));
+        loginCodeView.setPadding(dp(12), dp(10), dp(12), dp(10));
+        loginCodeView.setBackground(panelBg(0xff0d141b, dp(10), COLOR_STROKE));
         root.addView(loginCodeView, matchWrap());
-        addButton(root, R.string.copy_login_code, v -> copyLoginCode());
+
+        LinearLayout codeActions = row();
+        Button copyCode = smallButton(getString(R.string.copy_login_code), COLOR_SURFACE_2, COLOR_TEXT);
+        copyCode.setOnClickListener(v -> copyLoginCode());
+        codeActions.addView(copyCode, rowButtonParams());
+        refreshDeviceCodeButton = smallButton(
+                getString(R.string.refresh_device_code),
+                COLOR_SURFACE_2,
+                COLOR_TEXT
+        );
+        refreshDeviceCodeButton.setOnClickListener(v -> prepareDeviceLoginCode(true));
+        codeActions.addView(refreshDeviceCodeButton, rowButtonParams());
+        root.addView(codeActions, spaced());
+
+        deviceLoginButton = pillButton(getString(R.string.start_device_login), COLOR_ACCENT, COLOR_BG);
+        deviceLoginButton.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        deviceLoginButton.setOnClickListener(v -> startDeviceLogin());
+        root.addView(deviceLoginButton, spaced());
+        updateDeviceLoginControls();
+        root.post(() -> prepareDeviceLoginCode(false));
 
         tokenEdit = new EditText(this);
         tokenEdit.setHint(R.string.oauth_token_hint);
@@ -2302,6 +2392,7 @@ public class MainActivity extends Activity {
         tokenEdit.setTransformationMethod(PasswordTransformationMethod.getInstance());
         tokenEdit.setBackground(panelBg(COLOR_SURFACE_2, dp(10), COLOR_STROKE));
         tokenEdit.setPadding(dp(12), dp(10), dp(12), dp(10));
+        installInteractiveFeedback(tokenEdit, dp(10));
         root.addView(tokenEdit, spaced());
 
         showTokenBox = checkbox(R.string.show_oauth_token);
@@ -2353,12 +2444,27 @@ public class MainActivity extends Activity {
     private void addClipPlaybackSettings(LinearLayout root) {
         addSection(root, R.string.section_clip_playback);
         clipSystemBarsAutoHideBox = checkbox(R.string.clip_system_bars_auto_hide);
-        clipSystemBarsAutoHideBox.setChecked(YmpSettings.isClipSystemBarsAutoHideEnabled(this));
+        boolean television = DeviceUi.isTelevision(this);
+        clipSystemBarsAutoHideBox.setChecked(
+                !television && YmpSettings.isClipSystemBarsAutoHideEnabled(this)
+        );
+        clipSystemBarsAutoHideBox.setEnabled(!television);
+        clipSystemBarsAutoHideBox.setAlpha(television ? 0.55f : 1f);
         clipSystemBarsAutoHideBox.setOnCheckedChangeListener((buttonView, isChecked) -> {
             YmpSettings.setClipSystemBarsAutoHideEnabled(this, isChecked);
             Diagnostics.log(this, "YMP Clip Wave system bars auto-hide saved: enabled=" + isChecked);
+            updateStatus(getString(R.string.clip_system_bars_saved, isChecked
+                    ? getString(R.string.setting_enabled)
+                    : getString(R.string.setting_disabled)));
         });
         root.addView(clipSystemBarsAutoHideBox, spaced());
+        if (television) {
+            TextView tvHint = new TextView(this);
+            tvHint.setText(R.string.clip_system_bars_tv_ignored);
+            tvHint.setTextColor(COLOR_MUTED);
+            tvHint.setTextSize(13);
+            root.addView(tvHint, spaced());
+        }
     }
 
     private void addSideBarSettings(LinearLayout root) {
@@ -2411,6 +2517,7 @@ public class MainActivity extends Activity {
         equalizerPackageEdit.setBackground(panelBg(COLOR_SURFACE_2, dp(10), COLOR_STROKE));
         equalizerPackageEdit.setPadding(dp(12), 0, dp(12), 0);
         equalizerPackageEdit.setMinHeight(dp(48));
+        installInteractiveFeedback(equalizerPackageEdit, dp(10));
         root.addView(equalizerPackageEdit, spaced());
         addButton(root, R.string.save_equalizer_app, v -> {
             YmpSettings.setEqualizerPackage(this, equalizerPackageEdit.getText().toString());
@@ -3231,56 +3338,176 @@ public class MainActivity extends Activity {
         EmbeddedSideBarService.start(this, showPanel);
     }
 
-    private void startDeviceLogin() {
+    private void prepareDeviceLoginCode(boolean forceRefresh) {
         if (polling) {
-            updateStatus(statusWithCache("Login is already running"));
+            updateStatus(getString(R.string.device_login_already_running));
             return;
         }
+        if (!forceRefresh && hasUsableDeviceCode()) {
+            showDeviceCode(pendingDeviceCode.userCode);
+            updateDeviceLoginControls();
+            return;
+        }
+        if (deviceCodeLoading) {
+            updateStatus(getString(R.string.device_login_code_loading));
+            return;
+        }
+
+        final int generation = ++deviceCodeGeneration;
+        deviceCodeLoading = true;
+        if (forceRefresh || !hasUsableDeviceCode()) {
+            pendingDeviceCode = null;
+            pendingDeviceCodeExpiresAtMs = 0L;
+            latestDeviceCode = "";
+        }
+        if (loginCodeView != null) {
+            loginCodeView.setText(R.string.device_login_code_loading);
+        }
+        updateDeviceLoginControls();
+        updateStatus(getString(R.string.device_login_code_loading));
+        Diagnostics.log(this, "YMP device code request started");
+
+        new Thread(() -> {
+            try {
+                YandexMusicClient.DeviceCode code = new YandexMusicClient("").requestDeviceCode();
+                if (code.deviceCode.isEmpty() || code.userCode.isEmpty() || code.verificationUrl.isEmpty()) {
+                    throw new IllegalStateException(getString(R.string.device_login_code_invalid));
+                }
+                runOnUiThread(() -> {
+                    if (generation != deviceCodeGeneration) {
+                        return;
+                    }
+                    deviceCodeLoading = false;
+                    pendingDeviceCode = code;
+                    pendingDeviceCodeExpiresAtMs = System.currentTimeMillis()
+                            + Math.max(30L, code.expiresInSeconds) * 1000L;
+                    showDeviceCode(code.userCode);
+                    updateDeviceLoginControls();
+                    updateStatus(getString(R.string.device_login_code_ready));
+                    Diagnostics.log(this, "YMP device code ready");
+                });
+            } catch (Exception ex) {
+                Diagnostics.log(this, "YMP device code request failed", ex);
+                runOnUiThread(() -> {
+                    if (generation != deviceCodeGeneration) {
+                        return;
+                    }
+                    deviceCodeLoading = false;
+                    pendingDeviceCode = null;
+                    pendingDeviceCodeExpiresAtMs = 0L;
+                    latestDeviceCode = "";
+                    if (loginCodeView != null) {
+                        loginCodeView.setText(getString(
+                                R.string.device_login_code_failed,
+                                firstNonEmpty(ex.getMessage(), ex.getClass().getSimpleName())
+                        ));
+                    }
+                    updateDeviceLoginControls();
+                    updateStatus(getString(
+                            R.string.device_login_code_failed,
+                            firstNonEmpty(ex.getMessage(), ex.getClass().getSimpleName())
+                    ));
+                });
+            }
+        }, "YMP-PrepareLogin").start();
+    }
+
+    private void startDeviceLogin() {
+        if (polling) {
+            updateStatus(getString(R.string.device_login_already_running));
+            return;
+        }
+        final YandexMusicClient.DeviceCode code = pendingDeviceCode;
+        if (!hasUsableDeviceCode() || code == null) {
+            expireDeviceLoginCode();
+            updateDeviceLoginControls();
+            updateStatus(getString(R.string.device_login_code_expired));
+            return;
+        }
+
         polling = true;
-        Diagnostics.log(this, "YMP device login started");
-        updateStatus(statusWithCache("Requesting device code..."));
+        updateDeviceLoginControls();
+        Diagnostics.log(this, "YMP device login started with prepared code");
+        try {
+            startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(code.verificationUrl)));
+            updateStatus(getString(R.string.device_login_page_opened));
+        } catch (Exception ex) {
+            Diagnostics.log(this, "YMP device login page open failed", ex);
+            updateStatus(getString(R.string.device_login_page_open_failed, code.verificationUrl));
+        }
+
         new Thread(() -> {
             try {
                 YandexMusicClient client = new YandexMusicClient("");
-                YandexMusicClient.DeviceCode code = client.requestDeviceCode();
-                runOnUiThread(() -> {
-                    showDeviceCode(code.userCode);
-                    copyTextToClipboard("YMPlayer login code", code.userCode);
-                    Toast.makeText(this, R.string.login_code_copied, Toast.LENGTH_LONG).show();
-                    updateStatus(statusWithCache("Login code copied: " + code.userCode + "\nOpen " + code.verificationUrl + " and enter it."));
-                    try {
-                        startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(code.verificationUrl)));
-                    } catch (Exception ignored) {
-                    }
-                });
-
-                long deadline = System.currentTimeMillis() + code.expiresInSeconds * 1000L;
-                while (System.currentTimeMillis() < deadline && polling) {
-                    Thread.sleep(code.intervalSeconds * 1000L);
+                while (System.currentTimeMillis() < pendingDeviceCodeExpiresAtMs && polling) {
+                    Thread.sleep(Math.max(2L, code.intervalSeconds) * 1000L);
                     YandexMusicClient.OAuthToken token = client.pollDeviceToken(code.deviceCode);
                     if (token != null) {
                         TokenStore.save(this, token.accessToken, token.refreshToken);
+                        new YmpRepository(this).invalidateAccount();
+                        libraryLoaded = false;
+                        pendingDeviceCode = null;
+                        pendingDeviceCodeExpiresAtMs = 0L;
+                        latestDeviceCode = "";
                         runOnUiThread(() -> {
                             if (tokenEdit != null) {
                                 tokenEdit.setText(token.accessToken);
                             }
+                            if (loginCodeView != null) {
+                                loginCodeView.setText(R.string.device_login_complete);
+                            }
                             Diagnostics.log(this, "YMP device login complete");
-                            updateStatus(statusWithCache("Login complete"));
+                            updateStatus(getString(R.string.device_login_complete));
                         });
-                        polling = false;
                         return;
                     }
-                    runOnUiThread(() -> updateStatus(statusWithCache("Waiting for Yandex approval...")));
+                    runOnUiThread(() -> updateStatus(getString(R.string.device_login_waiting)));
                 }
                 Diagnostics.log(this, "YMP device login timed out");
-                runOnUiThread(() -> updateStatus(statusWithCache("Login timed out")));
+                runOnUiThread(() -> {
+                    expireDeviceLoginCode();
+                    updateStatus(getString(R.string.device_login_code_expired));
+                });
             } catch (Exception ex) {
                 Diagnostics.log(this, "YMP device login failed", ex);
-                runOnUiThread(() -> updateStatus(statusWithCache("Login failed: " + ex.getMessage())));
+                runOnUiThread(() -> updateStatus(getString(
+                        R.string.device_login_failed,
+                        firstNonEmpty(ex.getMessage(), ex.getClass().getSimpleName())
+                )));
             } finally {
                 polling = false;
+                runOnUiThread(this::updateDeviceLoginControls);
             }
         }, "YMP-Login").start();
+    }
+
+    private boolean hasUsableDeviceCode() {
+        YandexMusicClient.DeviceCode code = pendingDeviceCode;
+        return code != null
+                && !code.deviceCode.isEmpty()
+                && !code.userCode.isEmpty()
+                && System.currentTimeMillis() + 5_000L < pendingDeviceCodeExpiresAtMs;
+    }
+
+    private void expireDeviceLoginCode() {
+        pendingDeviceCode = null;
+        pendingDeviceCodeExpiresAtMs = 0L;
+        latestDeviceCode = "";
+        if (loginCodeView != null) {
+            loginCodeView.setText(R.string.device_login_code_expired);
+        }
+    }
+
+    private void updateDeviceLoginControls() {
+        boolean ready = hasUsableDeviceCode();
+        if (deviceLoginButton != null) {
+            deviceLoginButton.setEnabled(ready && !polling && !deviceCodeLoading);
+            deviceLoginButton.setAlpha(deviceLoginButton.isEnabled() ? 1f : 0.45f);
+        }
+        if (refreshDeviceCodeButton != null) {
+            refreshDeviceCodeButton.setEnabled(!polling && !deviceCodeLoading);
+            refreshDeviceCodeButton.setAlpha(refreshDeviceCodeButton.isEnabled() ? 1f : 0.45f);
+        }
     }
 
     private void testAccount() {
@@ -3451,12 +3678,12 @@ public class MainActivity extends Activity {
 
     private void copyLoginCode() {
         if (latestDeviceCode == null || latestDeviceCode.isEmpty()) {
-            updateStatus(statusWithCache("Start Yandex login first"));
+            updateStatus(getString(R.string.device_login_code_not_ready));
             return;
         }
         copyTextToClipboard("YMPlayer login code", latestDeviceCode);
         Toast.makeText(this, R.string.login_code_copied, Toast.LENGTH_SHORT).show();
-        updateStatus(statusWithCache("Login code copied: " + latestDeviceCode));
+        updateStatus(getString(R.string.login_code_copied));
     }
 
     private void copyTextToClipboard(String label, String text) {
@@ -3493,7 +3720,9 @@ public class MainActivity extends Activity {
     private void showDeviceCode(String code) {
         latestDeviceCode = code == null ? "" : code;
         if (loginCodeView != null) {
-            loginCodeView.setText(latestDeviceCode.isEmpty()
+            loginCodeView.setText(deviceCodeLoading
+                    ? getString(R.string.device_login_code_loading)
+                    : latestDeviceCode.isEmpty()
                     ? getString(R.string.login_code_empty)
                     : getString(R.string.login_code_template, latestDeviceCode));
         }
@@ -3510,6 +3739,27 @@ public class MainActivity extends Activity {
         if (statusView != null) {
             statusView.setText(text);
         }
+        updateSettingsFeedback(text);
+    }
+
+    private void updateSettingsFeedback(String text) {
+        TextView feedback = settingsFeedbackView;
+        if (feedback == null || text == null) {
+            return;
+        }
+        String primary = text.trim();
+        int cacheSeparator = primary.indexOf("\n\n");
+        if (cacheSeparator >= 0) {
+            primary = primary.substring(0, cacheSeparator).trim();
+        }
+        if (primary.isEmpty()) {
+            return;
+        }
+        feedback.animate().cancel();
+        feedback.setText(getString(R.string.settings_status_template, primary));
+        feedback.setAlpha(0f);
+        feedback.setVisibility(View.VISIBLE);
+        feedback.animate().alpha(1f).setDuration(140L).start();
     }
 
     private String statusWithCache(String primary) {
@@ -3581,14 +3831,20 @@ public class MainActivity extends Activity {
 
     private Button addButton(LinearLayout root, int titleRes, View.OnClickListener listener) {
         Button button = pillButton(getString(titleRes), COLOR_SURFACE_2, COLOR_TEXT);
-        button.setOnClickListener(listener);
+        button.setOnClickListener(v -> {
+            updateSettingsFeedback(getString(R.string.settings_action_received, button.getText()));
+            listener.onClick(v);
+        });
         root.addView(button, spaced());
         return button;
     }
 
     private void addActionButton(LinearLayout root, int titleRes, int bgColor, int textColor, View.OnClickListener listener) {
         Button button = pillButton(getString(titleRes), bgColor, textColor);
-        button.setOnClickListener(listener);
+        button.setOnClickListener(v -> {
+            updateSettingsFeedback(getString(R.string.settings_action_received, button.getText()));
+            listener.onClick(v);
+        });
         root.addView(button, rowButtonParams());
     }
 
@@ -3609,6 +3865,7 @@ public class MainActivity extends Activity {
         button.setPadding(dp(10), dp(10), dp(10), dp(10));
         button.setMinimumWidth(sizePx);
         button.setMinimumHeight(sizePx);
+        installInteractiveFeedback(button, dp(999));
         return button;
     }
 
@@ -3647,6 +3904,7 @@ public class MainActivity extends Activity {
         button.setBackground(panelBg(bgColor, dp(13), 0x00000000));
         button.setMinHeight(dp(44));
         button.setPadding(dp(10), 0, dp(10), 0);
+        installInteractiveFeedback(button, dp(13));
         return button;
     }
 
@@ -3659,7 +3917,76 @@ public class MainActivity extends Activity {
         box.setMinHeight(dp(48));
         box.setPadding(dp(2), dp(3), dp(4), dp(3));
         box.setButtonTintList(android.content.res.ColorStateList.valueOf(COLOR_ACCENT));
+        installInteractiveFeedback(box, dp(10));
         return box;
+    }
+
+    @SuppressLint("ClickableViewAccessibility")
+    private void installInteractiveFeedback(View view, int radiusPx) {
+        if (view == null) {
+            return;
+        }
+        boolean textInput = view instanceof EditText;
+        view.setFocusable(true);
+        view.setFocusableInTouchMode(textInput);
+        view.setOnFocusChangeListener((v, hasFocus) -> setInteractiveHighlight(v, hasFocus, radiusPx));
+        view.setOnHoverListener((v, event) -> {
+            if (event.getAction() == MotionEvent.ACTION_HOVER_ENTER) {
+                setInteractiveHighlight(v, true, radiusPx);
+            } else if (event.getAction() == MotionEvent.ACTION_HOVER_EXIT && !v.hasFocus()) {
+                setInteractiveHighlight(v, false, radiusPx);
+            }
+            return false;
+        });
+        view.setOnKeyListener((v, keyCode, event) -> {
+            if (!isActivationKey(keyCode) || !v.isEnabled()) {
+                return false;
+            }
+            if (event.getAction() == KeyEvent.ACTION_DOWN && event.getRepeatCount() == 0) {
+                animateInteractiveScale(v, textInput ? 1f : 0.94f);
+            } else if (event.getAction() == KeyEvent.ACTION_UP) {
+                animateInteractiveScale(v, textInput ? 1f : v.hasFocus() ? 1.045f : 1f);
+            }
+            return false;
+        });
+        view.setOnTouchListener((v, event) -> {
+            if (!v.isEnabled()) {
+                return false;
+            }
+            if (event.getAction() == MotionEvent.ACTION_DOWN) {
+                animateInteractiveScale(v, textInput ? 1f : 0.96f);
+            } else if (event.getAction() == MotionEvent.ACTION_UP
+                    || event.getAction() == MotionEvent.ACTION_CANCEL) {
+                animateInteractiveScale(v, textInput ? 1f : v.hasFocus() ? 1.045f : 1f);
+            }
+            return false;
+        });
+    }
+
+    private void setInteractiveHighlight(View view, boolean highlighted, int radiusPx) {
+        if (highlighted) {
+            GradientDrawable ring = new GradientDrawable();
+            ring.setColor(Color.TRANSPARENT);
+            ring.setCornerRadius(radiusPx);
+            ring.setStroke(dp(3), COLOR_TEXT);
+            view.setForeground(ring);
+        } else {
+            view.setForeground(null);
+        }
+        boolean textInput = view instanceof EditText;
+        animateInteractiveScale(view, highlighted && !textInput ? 1.045f : 1f);
+    }
+
+    private void animateInteractiveScale(View view, float scale) {
+        view.animate().cancel();
+        view.animate().scaleX(scale).scaleY(scale).setDuration(90L).start();
+    }
+
+    private boolean isActivationKey(int keyCode) {
+        return keyCode == KeyEvent.KEYCODE_DPAD_CENTER
+                || keyCode == KeyEvent.KEYCODE_ENTER
+                || keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER
+                || keyCode == KeyEvent.KEYCODE_SPACE;
     }
 
     private GradientDrawable panelBg(int color, int radius, int strokeColor) {

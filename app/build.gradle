@@ -10,8 +10,8 @@ android {
         applicationId "dev.petrov.yaplay"
         minSdk 29
         targetSdk 35
-        versionCode 100
-        versionName "1.0.0-beta"
+        versionCode 101
+        versionName "1.0.0-beta.1"
     }
 
     buildTypes {
