@@ -9,14 +9,14 @@ Android 10 и новее. Приложение рассчитано на сма�
 магнитолы, поддерживает системные медиакнопки и делает основной упор на
 "Мою волну", оффлайн-избранное и удобное управление в дороге.
 
-Текущая версия: **1.0.0-beta.1**. Основные функции завершены; статус beta оставлен
+Текущая версия: **1.0.0-beta.2**. Основные функции завершены; статус beta оставлен
 для длительного тестирования на разных устройствах и версиях сервисов Яндекса.
 
 ## Скачать
 
-- [YMPlayer 1.0.0-beta.1 в GitHub Releases](https://github.com/reziarlleh/YMPlayer/releases/tag/v1.0.0-beta.1)
-- [Скачать APK](https://github.com/reziarlleh/YMPlayer/releases/download/v1.0.0-beta.1/YMPlayer-v1.0.0-beta.1-release-b101.apk)
-- [APK в архиве репозитория](releases/1.0.0-beta.1/YMPlayer-v1.0.0-beta.1-release-b101.apk)
+- [YMPlayer 1.0.0-beta.2 в GitHub Releases](https://github.com/reziarlleh/YMPlayer/releases/tag/v1.0.0-beta.2)
+- [Скачать APK](https://github.com/reziarlleh/YMPlayer/releases/download/v1.0.0-beta.2/YMPlayer-v1.0.0-beta.2-release-b102.apk)
+- [APK в архиве репозитория](releases/1.0.0-beta.2/YMPlayer-v1.0.0-beta.2-release-b102.apk)
 
 APK поддерживает обновление ранее установленных версий YMPlayer без очистки
 настроек, авторизации и локального кэша.
