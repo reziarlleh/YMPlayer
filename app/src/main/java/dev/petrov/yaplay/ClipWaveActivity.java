@@ -11,6 +11,7 @@ import android.graphics.BitmapFactory;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.Drawable;
 import android.media.MediaMetadata;
 import android.media.session.MediaSession;
 import android.media.session.PlaybackState;
@@ -1386,11 +1387,11 @@ public final class ClipWaveActivity extends Activity {
         boolean canLike = currentTrack != null && likedKeysLoaded;
         likeButton.setEnabled(canLike);
         likeButton.setAlpha(canLike ? 1f : 0.4f);
-        likeButton.setBackground(roundBackground(
-                currentLiked ? COLOR_LIKE : COLOR_SURFACE,
-                dp(999),
-                0x00000000
-        ));
+        setInteractiveBackground(
+                likeButton,
+                roundBackground(currentLiked ? COLOR_LIKE : COLOR_SURFACE, dp(999), 0x00000000),
+                dp(999)
+        );
         likeButton.setColorFilter(currentLiked ? COLOR_BG : COLOR_TEXT);
         likeButton.setContentDescription(getString(currentLiked ? R.string.unlike_track : R.string.like_track));
         updateClipText();
@@ -1745,28 +1746,17 @@ public final class ClipWaveActivity extends Activity {
         view.setFocusable(true);
         view.setFocusableInTouchMode(true);
         view.setDefaultFocusHighlightEnabled(false);
+        ensureInteractiveBackground(view, radiusPx);
         if (Boolean.TRUE.equals(view.getTag(R.id.ymp_interactive_feedback_installed))) {
             return;
         }
         view.setTag(R.id.ymp_interactive_feedback_installed, Boolean.TRUE);
-        view.setOnFocusChangeListener((v, focused) -> setInteractiveHighlight(v, focused, false, radiusPx));
-        view.setOnHoverListener((v, event) -> {
-            if (event.getAction() == MotionEvent.ACTION_HOVER_ENTER) {
-                setInteractiveHighlight(v, true, false, radiusPx);
-            } else if (event.getAction() == MotionEvent.ACTION_HOVER_EXIT && !v.hasFocus()) {
-                setInteractiveHighlight(v, false, false, radiusPx);
-            }
-            return false;
-        });
         view.setOnKeyListener((v, keyCode, event) -> {
             if (!isActivationKey(keyCode) || !v.isEnabled()) {
                 return false;
             }
             if (event.getAction() == KeyEvent.ACTION_DOWN && event.getRepeatCount() == 0) {
                 scheduleOverlayHide();
-                setInteractiveHighlight(v, true, true, radiusPx);
-            } else if (event.getAction() == KeyEvent.ACTION_UP) {
-                setInteractiveHighlight(v, v.hasFocus() || v.isHovered(), false, radiusPx);
             }
             return false;
         });
@@ -1776,39 +1766,36 @@ public final class ClipWaveActivity extends Activity {
             }
             if (event.getAction() == MotionEvent.ACTION_DOWN) {
                 scheduleOverlayHide();
-                setInteractiveHighlight(v, true, true, radiusPx);
-            } else if (event.getAction() == MotionEvent.ACTION_UP
-                    || event.getAction() == MotionEvent.ACTION_CANCEL) {
-                setInteractiveHighlight(v, v.hasFocus() || v.isHovered(), false, radiusPx);
             }
             return false;
         });
     }
 
-    private void setInteractiveHighlight(View view, boolean highlighted, boolean pressed, int radiusPx) {
-        view.animate().cancel();
-        view.setScaleX(1f);
-        view.setScaleY(1f);
-        view.setForeground(null);
-        view.getOverlay().clear();
-        if (highlighted || pressed) {
-            if (view.getWidth() <= 0 || view.getHeight() <= 0) {
-                view.post(() -> setInteractiveHighlight(
-                        view,
-                        view.hasFocus() || view.isHovered(),
-                        view.isPressed(),
-                        radiusPx
-                ));
-                return;
-            }
-            GradientDrawable ring = new GradientDrawable();
-            ring.setColor(Color.argb(pressed ? 112 : 44, 255, 255, 255));
-            ring.setCornerRadius(radiusPx);
-            ring.setStroke(dp(3), COLOR_TEXT);
-            int inset = dp(2);
-            ring.setBounds(inset, inset, Math.max(inset, view.getWidth() - inset), Math.max(inset, view.getHeight() - inset));
-            view.getOverlay().add(ring);
+    private void ensureInteractiveBackground(View view, int radiusPx) {
+        if (!(view.getBackground() instanceof FocusHighlightDrawable)) {
+            setInteractiveBackground(view, view.getBackground(), radiusPx);
         }
+    }
+
+    private void setInteractiveBackground(View view, Drawable background, int radiusPx) {
+        if (view == null) {
+            return;
+        }
+        int left = view.getPaddingLeft();
+        int top = view.getPaddingTop();
+        int right = view.getPaddingRight();
+        int bottom = view.getPaddingBottom();
+        view.setBackground(new FocusHighlightDrawable(
+                background,
+                radiusPx,
+                dp(2),
+                dp(4),
+                COLOR_TEXT,
+                Color.argb(68, 255, 255, 255),
+                Color.argb(140, 255, 255, 255)
+        ));
+        view.setPadding(left, top, right, bottom);
+        view.refreshDrawableState();
     }
 
     private void installInteractiveFeedbackTree(View root) {

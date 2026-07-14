@@ -18,6 +18,7 @@ import android.graphics.Bitmap;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.ColorDrawable;
+import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
 import android.media.AudioManager;
 import android.media.audiofx.AudioEffect;
@@ -3138,7 +3139,11 @@ public class MainActivity extends Activity {
         if (playPauseButton != null) {
             playPauseButton.setImageResource(currentPlaying ? R.drawable.ic_player_pause : R.drawable.ic_player_play);
             boolean active = currentPlaying || currentPrepared;
-            playPauseButton.setBackground(panelBg(active ? COLOR_ACCENT : COLOR_SURFACE_2, dp(999), 0x00000000));
+            setInteractiveBackground(
+                    playPauseButton,
+                    panelBg(active ? COLOR_ACCENT : COLOR_SURFACE_2, dp(999), 0x00000000),
+                    dp(999)
+            );
             playPauseButton.setColorFilter(active ? COLOR_BG : COLOR_TEXT);
         }
         if (queueModeButton != null) {
@@ -3148,22 +3153,26 @@ public class MainActivity extends Activity {
             if (sourceIsWave || currentPlayMode == 0) {
                 queueModeButton.setImageResource(R.drawable.ic_player_order);
                 queueModeButton.setContentDescription(getString(sourceIsWave ? R.string.queue_mode_wave : R.string.queue_mode_order));
-                queueModeButton.setBackground(panelBg(COLOR_SURFACE_2, dp(999), 0x00000000));
+                setInteractiveBackground(queueModeButton, panelBg(COLOR_SURFACE_2, dp(999), 0x00000000), dp(999));
                 queueModeButton.setColorFilter(COLOR_TEXT);
             } else if (currentPlayMode == 1) {
                 queueModeButton.setImageResource(R.drawable.ic_player_shuffle);
                 queueModeButton.setContentDescription(getString(R.string.queue_mode_shuffle));
-                queueModeButton.setBackground(panelBg(COLOR_ACCENT_2, dp(999), 0x00000000));
+                setInteractiveBackground(queueModeButton, panelBg(COLOR_ACCENT_2, dp(999), 0x00000000), dp(999));
                 queueModeButton.setColorFilter(COLOR_BG);
             } else {
                 queueModeButton.setImageResource(R.drawable.ic_player_repeat);
                 queueModeButton.setContentDescription(getString(R.string.queue_mode_repeat));
-                queueModeButton.setBackground(panelBg(COLOR_ACCENT, dp(999), 0x00000000));
+                setInteractiveBackground(queueModeButton, panelBg(COLOR_ACCENT, dp(999), 0x00000000), dp(999));
                 queueModeButton.setColorFilter(COLOR_BG);
             }
         }
         if (likeButton != null) {
-            likeButton.setBackground(panelBg(currentLiked ? COLOR_ACCENT : 0xff1f3b32, dp(999), 0x00000000));
+            setInteractiveBackground(
+                    likeButton,
+                    panelBg(currentLiked ? COLOR_ACCENT : 0xff1f3b32, dp(999), 0x00000000),
+                    dp(999)
+            );
             likeButton.setColorFilter(currentLiked ? COLOR_BG : 0xffbcffe8);
             likeButton.setContentDescription(getString(currentLiked ? R.string.unlike_track : R.string.like_track));
         }
@@ -4098,7 +4107,11 @@ public class MainActivity extends Activity {
         }
         button.setTextColor(selected ? COLOR_BG : COLOR_TEXT);
         button.setTypeface(Typeface.DEFAULT, selected ? Typeface.BOLD : Typeface.NORMAL);
-        button.setBackground(panelBg(selected ? COLOR_ACCENT : COLOR_SURFACE_2, dp(13), selected ? COLOR_ACCENT : COLOR_STROKE));
+        setInteractiveBackground(
+                button,
+                panelBg(selected ? COLOR_ACCENT : COLOR_SURFACE_2, dp(13), selected ? COLOR_ACCENT : COLOR_STROKE),
+                dp(13)
+        );
     }
 
     private Button pillButton(String text, int bgColor, int textColor) {
@@ -4155,68 +4168,38 @@ public class MainActivity extends Activity {
         view.setFocusable(true);
         view.setFocusableInTouchMode(true);
         view.setDefaultFocusHighlightEnabled(false);
+        ensureInteractiveBackground(view, radiusPx);
         if (Boolean.TRUE.equals(view.getTag(R.id.ymp_interactive_feedback_installed))) {
             return;
         }
         view.setTag(R.id.ymp_interactive_feedback_installed, Boolean.TRUE);
-        view.setOnFocusChangeListener((v, hasFocus) -> setInteractiveHighlight(v, hasFocus, false, radiusPx));
-        view.setOnHoverListener((v, event) -> {
-            if (event.getAction() == MotionEvent.ACTION_HOVER_ENTER) {
-                setInteractiveHighlight(v, true, false, radiusPx);
-            } else if (event.getAction() == MotionEvent.ACTION_HOVER_EXIT && !v.hasFocus()) {
-                setInteractiveHighlight(v, false, false, radiusPx);
-            }
-            return false;
-        });
-        view.setOnKeyListener((v, keyCode, event) -> {
-            if (!isActivationKey(keyCode) || !v.isEnabled()) {
-                return false;
-            }
-            if (event.getAction() == KeyEvent.ACTION_DOWN && event.getRepeatCount() == 0) {
-                setInteractiveHighlight(v, true, true, radiusPx);
-            } else if (event.getAction() == KeyEvent.ACTION_UP) {
-                setInteractiveHighlight(v, v.hasFocus() || v.isHovered(), false, radiusPx);
-            }
-            return false;
-        });
-        view.setOnTouchListener((v, event) -> {
-            if (!v.isEnabled()) {
-                return false;
-            }
-            if (event.getAction() == MotionEvent.ACTION_DOWN) {
-                setInteractiveHighlight(v, true, true, radiusPx);
-            } else if (event.getAction() == MotionEvent.ACTION_UP
-                    || event.getAction() == MotionEvent.ACTION_CANCEL) {
-                setInteractiveHighlight(v, v.hasFocus() || v.isHovered(), false, radiusPx);
-            }
-            return false;
-        });
     }
 
-    private void setInteractiveHighlight(View view, boolean highlighted, boolean pressed, int radiusPx) {
-        view.animate().cancel();
-        view.setScaleX(1f);
-        view.setScaleY(1f);
-        view.setForeground(null);
-        view.getOverlay().clear();
-        if (highlighted || pressed) {
-            if (view.getWidth() <= 0 || view.getHeight() <= 0) {
-                view.post(() -> setInteractiveHighlight(
-                        view,
-                        view.hasFocus() || view.isHovered(),
-                        view.isPressed(),
-                        radiusPx
-                ));
-                return;
-            }
-            GradientDrawable ring = new GradientDrawable();
-            ring.setColor(Color.argb(pressed ? 112 : 44, 255, 255, 255));
-            ring.setCornerRadius(radiusPx);
-            ring.setStroke(dp(3), COLOR_TEXT);
-            int inset = dp(2);
-            ring.setBounds(inset, inset, Math.max(inset, view.getWidth() - inset), Math.max(inset, view.getHeight() - inset));
-            view.getOverlay().add(ring);
+    private void ensureInteractiveBackground(View view, int radiusPx) {
+        if (!(view.getBackground() instanceof FocusHighlightDrawable)) {
+            setInteractiveBackground(view, view.getBackground(), radiusPx);
         }
+    }
+
+    private void setInteractiveBackground(View view, Drawable background, int radiusPx) {
+        if (view == null) {
+            return;
+        }
+        int left = view.getPaddingLeft();
+        int top = view.getPaddingTop();
+        int right = view.getPaddingRight();
+        int bottom = view.getPaddingBottom();
+        view.setBackground(new FocusHighlightDrawable(
+                background,
+                radiusPx,
+                dp(2),
+                dp(4),
+                COLOR_TEXT,
+                Color.argb(68, 255, 255, 255),
+                Color.argb(140, 255, 255, 255)
+        ));
+        view.setPadding(left, top, right, bottom);
+        view.refreshDrawableState();
     }
 
     private void installInteractiveFeedbackTree(View root) {
