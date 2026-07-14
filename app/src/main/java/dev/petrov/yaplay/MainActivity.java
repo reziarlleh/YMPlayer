@@ -1886,7 +1886,7 @@ public class MainActivity extends Activity {
         installInteractiveFeedback(item, dp(8));
 
         ImageView thumb = new ImageView(this);
-        thumb.setImageResource(R.mipmap.ic_launcher);
+        thumb.setImageResource(R.drawable.ymplayer_default_artwork);
         thumb.setBackground(panelBg(0xff0b1118, dp(6), 0xff25384a));
         thumb.setScaleType(ImageView.ScaleType.CENTER_CROP);
         int thumbSize = dp(58);
@@ -1980,7 +1980,7 @@ public class MainActivity extends Activity {
         root.addView(top, matchWrap());
 
         ImageButton logo = new ImageButton(this);
-        logo.setImageResource(R.mipmap.ic_launcher);
+        logo.setImageResource(R.drawable.ymplayer_default_artwork);
         logo.setScaleType(ImageView.ScaleType.FIT_CENTER);
         logo.setPadding(dp(2), dp(2), dp(2), dp(2));
         logo.setBackgroundColor(Color.TRANSPARENT);
@@ -2047,7 +2047,7 @@ public class MainActivity extends Activity {
         root.setBackground(panelBg(COLOR_SURFACE, dp(12), COLOR_STROKE));
 
         ImageView logo = new ImageView(this);
-        logo.setImageResource(R.mipmap.ic_launcher);
+        logo.setImageResource(R.drawable.ymplayer_default_artwork);
         logo.setScaleType(ImageView.ScaleType.FIT_CENTER);
         root.addView(logo, new LinearLayout.LayoutParams(dp(92), dp(92)));
 
@@ -2109,7 +2109,7 @@ public class MainActivity extends Activity {
         playerSurface.addView(coverPanel, panelParams);
 
         coverView = new ImageView(this);
-        coverView.setImageResource(R.mipmap.ic_launcher);
+        coverView.setImageResource(R.drawable.ymplayer_default_artwork);
         coverView.setBackgroundColor(0xff20242b);
         coverView.setScaleType(ImageView.ScaleType.CENTER_CROP);
         coverPanel.addView(coverView, matchFrame());
@@ -2665,6 +2665,7 @@ public class MainActivity extends Activity {
         root.addView(autoCacheLikedBox, spaced());
 
         addButton(root, R.string.sync_favorite_tracks, v -> startFavoritesCacheSync());
+        addButton(root, R.string.sync_favorite_artwork, v -> startFavoriteArtworkSync());
         addButton(root, R.string.cancel_cache_sync, v -> cancelCacheSync());
         addButton(root, R.string.show_cache_status, v -> updateStatus(statusWithCache(CacheSyncService.lastStatus())));
         addButton(root, R.string.clear_local_cache, v -> clearLocalCache());
@@ -3203,7 +3204,7 @@ public class MainActivity extends Activity {
         latestCoverUrl = identity;
         latestCoverLoaded = false;
         latestCoverLoading = !identity.isEmpty();
-        coverView.setImageResource(R.mipmap.ic_launcher);
+        coverView.setImageResource(R.drawable.ymplayer_default_artwork);
         if (identity.isEmpty()) {
             latestCoverLoading = false;
             return;
@@ -3228,7 +3229,7 @@ public class MainActivity extends Activity {
                 } else if (identity.equals(latestCoverUrl)) {
                     runOnUiThread(() -> {
                         if (identity.equals(latestCoverUrl)) {
-                            coverView.setImageResource(R.mipmap.ic_launcher);
+                            coverView.setImageResource(R.drawable.ymplayer_default_artwork);
                             latestCoverLoaded = false;
                         }
                     });
@@ -3238,7 +3239,7 @@ public class MainActivity extends Activity {
                 if (identity.equals(latestCoverUrl)) {
                     runOnUiThread(() -> {
                         if (identity.equals(latestCoverUrl)) {
-                            coverView.setImageResource(R.mipmap.ic_launcher);
+                            coverView.setImageResource(R.drawable.ymplayer_default_artwork);
                             latestCoverLoaded = false;
                             latestCoverLoading = false;
                             scheduleCoverRetry(url, localKey, identity);
@@ -3271,7 +3272,7 @@ public class MainActivity extends Activity {
                         latestCoverLoaded = true;
                         latestCoverRetryCount = 0;
                     } else {
-                        coverView.setImageResource(R.mipmap.ic_launcher);
+                        coverView.setImageResource(R.drawable.ymplayer_default_artwork);
                         latestCoverLoaded = false;
                         scheduleCoverRetry("", localTrackKey, identity);
                     }
@@ -3288,10 +3289,10 @@ public class MainActivity extends Activity {
         String url = coverUrl == null ? "" : coverUrl.trim();
         target.setTag(url);
         if (url.isEmpty()) {
-            target.setImageResource(R.mipmap.ic_launcher);
+            target.setImageResource(R.drawable.ymplayer_default_artwork);
             return;
         }
-        target.setImageResource(R.mipmap.ic_launcher);
+        target.setImageResource(R.drawable.ymplayer_default_artwork);
         Context appContext = getApplicationContext();
         new Thread(() -> {
             try {
@@ -3307,7 +3308,7 @@ public class MainActivity extends Activity {
                 Diagnostics.log(appContext, "YMP thumbnail load failed", ex);
                 runOnUiThread(() -> {
                     if (url.equals(target.getTag())) {
-                        target.setImageResource(R.mipmap.ic_launcher);
+                        target.setImageResource(R.drawable.ymplayer_default_artwork);
                     }
                 });
             }
@@ -3759,6 +3760,14 @@ public class MainActivity extends Activity {
     }
 
     private void startFavoritesCacheSync() {
+        startFavoritesCacheSync(false);
+    }
+
+    private void startFavoriteArtworkSync() {
+        startFavoritesCacheSync(true);
+    }
+
+    private void startFavoritesCacheSync(boolean artworkOnly) {
         persistTypedToken();
         if (TokenStore.getAccessToken(this).trim().isEmpty()) {
             Diagnostics.log(this, "YMP cache sync blocked: no token");
@@ -3773,17 +3782,21 @@ public class MainActivity extends Activity {
         saveCacheSettings();
         boolean wifiOnly = wifiOnlyBox != null ? wifiOnlyBox.isChecked() : CacheSettings.isWifiOnly(this);
         boolean chargingOnly = chargingOnlyBox != null ? chargingOnlyBox.isChecked() : CacheSettings.isChargingOnly(this);
-        Diagnostics.log(this, "YMP favorite cache sync requested"
+        String operation = artworkOnly ? "YMP favorite artwork sync requested" : "YMP favorite cache sync requested";
+        Diagnostics.log(this, operation
                 + ", wifiOnly=" + wifiOnly
                 + ", chargingOnly=" + chargingOnly);
         Intent intent = new Intent(this, CacheSyncService.class);
         intent.setAction(CacheSyncService.ACTION_SYNC);
         intent.putExtra(CacheSyncService.EXTRA_INCLUDE_LIKED, true);
         intent.putExtra(CacheSyncService.EXTRA_INCLUDE_PLAYLISTS, false);
+        intent.putExtra(CacheSyncService.EXTRA_ARTWORK_ONLY, artworkOnly);
         intent.putExtra(CacheSyncService.EXTRA_WIFI_ONLY, wifiOnly);
         intent.putExtra(CacheSyncService.EXTRA_CHARGING_ONLY, chargingOnly);
         startForegroundService(intent);
-        updateStatus(statusWithCache("Starting cache sync service..."));
+        updateStatus(statusWithCache(artworkOnly
+                ? "Starting favorite artwork sync..."
+                : "Starting cache sync service..."));
     }
 
     private void cancelCacheSync() {

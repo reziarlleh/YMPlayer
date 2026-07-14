@@ -1286,7 +1286,10 @@ public final class ClipWaveActivity extends Activity {
         ClipWaveClient.Clip clip = currentClip;
         Bitmap safeArtwork = artwork;
         if (safeArtwork == null) {
-            safeArtwork = BitmapFactory.decodeResource(getResources(), R.mipmap.ic_launcher);
+            safeArtwork = BitmapFactory.decodeResource(
+                    getResources(),
+                    R.drawable.ymplayer_default_artwork
+            );
         }
         MediaMetadata.Builder metadata = new MediaMetadata.Builder()
                 .putString(MediaMetadata.METADATA_KEY_MEDIA_ID, clip == null ? "clip_wave" : clip.clipId)

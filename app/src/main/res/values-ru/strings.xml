@@ -56,6 +56,7 @@
     <string name="test_account">Проверить аккаунт</string>
     <string name="clear_token">Удалить сохраненный токен</string>
     <string name="sync_favorite_tracks">Синхронизировать «Мне нравится»</string>
+    <string name="sync_favorite_artwork">Синхронизировать обложки для избранного</string>
     <string name="cancel_cache_sync">Остановить синхронизацию</string>
     <string name="show_cache_status">Показать состояние кэша</string>
     <string name="clear_local_cache">Очистить локальный кэш</string>

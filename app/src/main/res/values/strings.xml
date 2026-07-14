@@ -253,6 +253,7 @@
     <string name="test_account">Check account</string>
     <string name="clear_token">Clear saved token</string>
     <string name="sync_favorite_tracks">Sync Favorites (Liked tracks)</string>
+    <string name="sync_favorite_artwork">Sync artwork for Favorites</string>
     <string name="cancel_cache_sync">Cancel cache sync</string>
     <string name="show_cache_status">Show cache status</string>
     <string name="clear_local_cache">Clear local cache</string>

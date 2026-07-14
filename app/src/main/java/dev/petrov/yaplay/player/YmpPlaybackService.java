@@ -1340,13 +1340,16 @@ public class YmpPlaybackService extends MediaBrowserService {
 
     private Bitmap defaultArtworkBitmap() {
         if (defaultArtworkBitmap == null) {
-            defaultArtworkBitmap = BitmapFactory.decodeResource(getResources(), R.mipmap.ic_launcher);
+            defaultArtworkBitmap = BitmapFactory.decodeResource(
+                    getResources(),
+                    R.drawable.ymplayer_default_artwork
+            );
         }
         return defaultArtworkBitmap;
     }
 
     private String defaultArtworkUri() {
-        return "android.resource://" + getPackageName() + "/" + R.mipmap.ic_launcher;
+        return "android.resource://" + getPackageName() + "/" + R.drawable.ymplayer_default_artwork;
     }
 
     private void ensureMetadataCover(YandexMusicClient.Track track) {

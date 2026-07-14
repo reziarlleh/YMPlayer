@@ -74,6 +74,18 @@ public final class YandexTrackCache {
         return syncLikedArtwork(client, track);
     }
 
+    public synchronized ArtworkSyncResult cacheLikedArtwork(
+            YandexMusicClient client,
+            YandexMusicClient.Track track
+    ) throws IOException {
+        if (track == null || !hasAudio(likedRoot, track.key)) {
+            return ArtworkSyncResult.NOT_CACHED;
+        }
+        // Refresh metadata too: older cache entries may not contain a cover URL.
+        writeMetadata(likedRoot, track);
+        return syncLikedArtwork(client, track);
+    }
+
     public static File likedArtworkFile(Context context, String trackKey) {
         Context appContext = context.getApplicationContext();
         return new File(
@@ -661,6 +673,7 @@ public final class YandexTrackCache {
     public enum ArtworkSyncResult {
         PRESENT,
         DOWNLOADED,
+        NOT_CACHED,
         NO_SOURCE,
         FAILED
     }

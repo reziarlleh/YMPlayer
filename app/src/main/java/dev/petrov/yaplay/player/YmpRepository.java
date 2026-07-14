@@ -405,6 +405,81 @@ public final class YmpRepository {
         return result;
     }
 
+    public synchronized ArtworkCacheSyncResult syncFavoriteArtworkCache(CacheProgress progress) throws Exception {
+        Diagnostics.log(context, "YMP favorite artwork sync started");
+        YandexMusicClient client = client();
+        long uid = account().uid;
+        Map<String, YandexMusicClient.Track> unique = new LinkedHashMap<>();
+
+        notifyProgress(progress, "Loading favorite tracks for artwork sync...");
+        addUnique(unique, client.getLikedTracks(uid));
+
+        int cachedTracks = 0;
+        int present = 0;
+        int downloaded = 0;
+        int noSource = 0;
+        int failed = 0;
+        int notCached = 0;
+        int index = 1;
+        for (YandexMusicClient.Track track : unique.values()) {
+            if (isCancelled(progress)) {
+                ArtworkCacheSyncResult result = new ArtworkCacheSyncResult(
+                        unique.size(), cachedTracks, present, downloaded,
+                        noSource, failed, notCached, true
+                );
+                Diagnostics.log(context, result.summaryText());
+                return result;
+            }
+
+            if (!audioCache.hasLikedTrack(track.key)) {
+                notCached++;
+                index++;
+                continue;
+            }
+
+            cachedTracks++;
+            notifyProgress(progress, "Checking artwork " + index + "/" + unique.size() + ": "
+                    + track.artist + " - " + track.title);
+            try {
+                YandexTrackCache.ArtworkSyncResult artwork = audioCache.cacheLikedArtwork(client, track);
+                switch (artwork) {
+                    case PRESENT:
+                        present++;
+                        break;
+                    case DOWNLOADED:
+                        downloaded++;
+                        notifyProgress(progress, "Artwork downloaded " + index + "/" + unique.size() + ": "
+                                + track.artist + " - " + track.title);
+                        break;
+                    case NO_SOURCE:
+                        noSource++;
+                        break;
+                    case NOT_CACHED:
+                        cachedTracks--;
+                        notCached++;
+                        break;
+                    case FAILED:
+                    default:
+                        failed++;
+                        break;
+                }
+            } catch (Exception ex) {
+                failed++;
+                Diagnostics.log(context, "YMP unable to sync liked artwork " + track.key, ex);
+                notifyProgress(progress, "Artwork failed " + index + "/" + unique.size() + ": "
+                        + track.title + " (" + ex.getMessage() + ")");
+            }
+            index++;
+        }
+
+        ArtworkCacheSyncResult result = new ArtworkCacheSyncResult(
+                unique.size(), cachedTracks, present, downloaded,
+                noSource, failed, notCached, false
+        );
+        Diagnostics.log(context, result.summaryText());
+        return result;
+    }
+
     public synchronized ParcelFileDescriptor openForPlayback(YandexMusicClient.Track track) throws Exception {
         if (track != null && LocalPlaylistStore.isLocalTrackKey(track.key)) {
             Uri uri = LocalPlaylistStore.uriFromTrackKey(track.key);
@@ -675,6 +750,48 @@ public final class YmpRepository {
                     + ", covers restored " + coversDownloaded
                     + ", cover failures " + coverFailures
                     + ", removed non-favorites " + removed
+                    + ", failed " + failed;
+        }
+    }
+
+    public static final class ArtworkCacheSyncResult {
+        public final int totalFavorites;
+        public final int cachedTracks;
+        public final int present;
+        public final int downloaded;
+        public final int noSource;
+        public final int failed;
+        public final int notCached;
+        public final boolean cancelled;
+
+        ArtworkCacheSyncResult(
+                int totalFavorites,
+                int cachedTracks,
+                int present,
+                int downloaded,
+                int noSource,
+                int failed,
+                int notCached,
+                boolean cancelled
+        ) {
+            this.totalFavorites = totalFavorites;
+            this.cachedTracks = cachedTracks;
+            this.present = present;
+            this.downloaded = downloaded;
+            this.noSource = noSource;
+            this.failed = failed;
+            this.notCached = notCached;
+            this.cancelled = cancelled;
+        }
+
+        public String summaryText() {
+            String status = cancelled ? "Artwork sync cancelled" : "Artwork sync complete";
+            return status + ": favorites " + totalFavorites
+                    + ", cached tracks " + cachedTracks
+                    + ", downloaded " + downloaded
+                    + ", already present " + present
+                    + ", no artwork source " + noSource
+                    + ", not downloaded " + notCached
                     + ", failed " + failed;
         }
     }
