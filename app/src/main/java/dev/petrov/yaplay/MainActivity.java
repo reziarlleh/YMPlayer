@@ -172,7 +172,9 @@ public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setContentView(buildContent());
+        View content = buildContent();
+        setContentView(content);
+        installInteractiveFeedbackTree(content);
         if (DeviceUi.isTelevision(this) && playPauseButton != null) {
             playPauseButton.post(playPauseButton::requestFocus);
         }
@@ -1950,6 +1952,7 @@ public class MainActivity extends Activity {
         dialog.setOnShowListener(d -> {
             Window shown = dialog.getWindow();
             if (shown != null) {
+                installInteractiveFeedbackTree(shown.getDecorView());
                 shown.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
                 shown.setLayout(
                         isWideLayout() ? Math.min(dp(maxWidthDp), getResources().getDisplayMetrics().widthPixels - dp(48)) : WindowManager.LayoutParams.MATCH_PARENT,
@@ -2321,6 +2324,9 @@ public class MainActivity extends Activity {
                 );
             }
             navigator.showIndex();
+            if (shown != null) {
+                installInteractiveFeedbackTree(shown.getDecorView());
+            }
         });
         dialog.setOnDismissListener(d -> {
             settingsFeedbackView = null;
@@ -2490,6 +2496,7 @@ public class MainActivity extends Activity {
         }
 
         private void showScreen(ScrollView scroll) {
+            installInteractiveFeedbackTree(scroll);
             host.removeAllViews();
             int screenWidth = getResources().getDisplayMetrics().widthPixels;
             int width = isWideLayout()
@@ -4142,12 +4149,16 @@ public class MainActivity extends Activity {
         if (view == null) {
             return;
         }
-        boolean textInput = view instanceof EditText;
         view.animate().cancel();
         view.setScaleX(1f);
         view.setScaleY(1f);
         view.setFocusable(true);
-        view.setFocusableInTouchMode(textInput);
+        view.setFocusableInTouchMode(true);
+        view.setDefaultFocusHighlightEnabled(false);
+        if (Boolean.TRUE.equals(view.getTag(R.id.ymp_interactive_feedback_installed))) {
+            return;
+        }
+        view.setTag(R.id.ymp_interactive_feedback_installed, Boolean.TRUE);
         view.setOnFocusChangeListener((v, hasFocus) -> setInteractiveHighlight(v, hasFocus, false, radiusPx));
         view.setOnHoverListener((v, event) -> {
             if (event.getAction() == MotionEvent.ACTION_HOVER_ENTER) {
@@ -4186,15 +4197,64 @@ public class MainActivity extends Activity {
         view.animate().cancel();
         view.setScaleX(1f);
         view.setScaleY(1f);
+        view.setForeground(null);
+        view.getOverlay().clear();
         if (highlighted || pressed) {
+            if (view.getWidth() <= 0 || view.getHeight() <= 0) {
+                view.post(() -> setInteractiveHighlight(
+                        view,
+                        view.hasFocus() || view.isHovered(),
+                        view.isPressed(),
+                        radiusPx
+                ));
+                return;
+            }
             GradientDrawable ring = new GradientDrawable();
-            ring.setColor(Color.argb(pressed ? 96 : 28, 255, 255, 255));
+            ring.setColor(Color.argb(pressed ? 112 : 44, 255, 255, 255));
             ring.setCornerRadius(radiusPx);
             ring.setStroke(dp(3), COLOR_TEXT);
-            view.setForeground(ring);
-        } else {
-            view.setForeground(null);
+            int inset = dp(2);
+            ring.setBounds(inset, inset, Math.max(inset, view.getWidth() - inset), Math.max(inset, view.getHeight() - inset));
+            view.getOverlay().add(ring);
         }
+    }
+
+    private void installInteractiveFeedbackTree(View root) {
+        if (root == null) {
+            return;
+        }
+        if (isInteractiveControl(root)) {
+            installInteractiveFeedback(root, defaultInteractiveRadius(root));
+        }
+        if (root instanceof ViewGroup) {
+            ViewGroup group = (ViewGroup) root;
+            for (int i = 0; i < group.getChildCount(); i++) {
+                installInteractiveFeedbackTree(group.getChildAt(i));
+            }
+        }
+    }
+
+    private boolean isInteractiveControl(View view) {
+        return view instanceof Button
+                || view instanceof ImageButton
+                || view instanceof CheckBox
+                || view instanceof EditText
+                || view instanceof android.widget.SeekBar
+                || (view instanceof TextView && ((TextView) view).isTextSelectable())
+                || (view instanceof LinearLayout && view.isClickable());
+    }
+
+    private int defaultInteractiveRadius(View view) {
+        if (view instanceof ImageButton) {
+            return dp(999);
+        }
+        if (view instanceof LinearLayout) {
+            return dp(8);
+        }
+        if (view instanceof Button) {
+            return dp(13);
+        }
+        return dp(10);
     }
 
     private boolean isActivationKey(int keyCode) {

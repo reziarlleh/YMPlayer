@@ -419,7 +419,9 @@ public final class ClipWaveActivity extends Activity {
         if (playerView != null) {
             playerView.setPlayer(null);
         }
-        setContentView(buildContent());
+        View content = buildContent();
+        setContentView(content);
+        installInteractiveFeedbackTree(content);
         playerView.setPlayer(player);
         updateClipText();
         updateControls();
@@ -1741,7 +1743,12 @@ public final class ClipWaveActivity extends Activity {
         view.setScaleX(1f);
         view.setScaleY(1f);
         view.setFocusable(true);
-        view.setFocusableInTouchMode(false);
+        view.setFocusableInTouchMode(true);
+        view.setDefaultFocusHighlightEnabled(false);
+        if (Boolean.TRUE.equals(view.getTag(R.id.ymp_interactive_feedback_installed))) {
+            return;
+        }
+        view.setTag(R.id.ymp_interactive_feedback_installed, Boolean.TRUE);
         view.setOnFocusChangeListener((v, focused) -> setInteractiveHighlight(v, focused, false, radiusPx));
         view.setOnHoverListener((v, event) -> {
             if (event.getAction() == MotionEvent.ACTION_HOVER_ENTER) {
@@ -1782,14 +1789,40 @@ public final class ClipWaveActivity extends Activity {
         view.animate().cancel();
         view.setScaleX(1f);
         view.setScaleY(1f);
+        view.setForeground(null);
+        view.getOverlay().clear();
         if (highlighted || pressed) {
+            if (view.getWidth() <= 0 || view.getHeight() <= 0) {
+                view.post(() -> setInteractiveHighlight(
+                        view,
+                        view.hasFocus() || view.isHovered(),
+                        view.isPressed(),
+                        radiusPx
+                ));
+                return;
+            }
             GradientDrawable ring = new GradientDrawable();
-            ring.setColor(Color.argb(pressed ? 96 : 28, 255, 255, 255));
+            ring.setColor(Color.argb(pressed ? 112 : 44, 255, 255, 255));
             ring.setCornerRadius(radiusPx);
             ring.setStroke(dp(3), COLOR_TEXT);
-            view.setForeground(ring);
-        } else {
-            view.setForeground(null);
+            int inset = dp(2);
+            ring.setBounds(inset, inset, Math.max(inset, view.getWidth() - inset), Math.max(inset, view.getHeight() - inset));
+            view.getOverlay().add(ring);
+        }
+    }
+
+    private void installInteractiveFeedbackTree(View root) {
+        if (root == null) {
+            return;
+        }
+        if (root instanceof ImageButton || root instanceof SeekBar) {
+            installInteractiveFeedback(root, root instanceof ImageButton ? dp(999) : dp(10));
+        }
+        if (root instanceof ViewGroup) {
+            ViewGroup group = (ViewGroup) root;
+            for (int i = 0; i < group.getChildCount(); i++) {
+                installInteractiveFeedbackTree(group.getChildAt(i));
+            }
         }
     }
 
