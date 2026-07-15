@@ -216,7 +216,6 @@ public class EmbeddedSideBarService extends Service {
             resetAutoHide();
             Ts18AudioControls.back(this);
         });
-        addPanelButton(panel, horizontal, hideIcon(edge), "Hide", v -> collapse());
         addPanelButton(panel, horizontal, R.drawable.ic_side_sleep, getString(R.string.sidebar_sleep), v -> {
             resetAutoHide();
             if (Ts18AudioControls.sleep(this)) {
@@ -231,6 +230,7 @@ public class EmbeddedSideBarService extends Service {
                 Toast.makeText(this, R.string.reboot_menu_unavailable, Toast.LENGTH_LONG).show();
             }
         });
+        addPanelButton(panel, horizontal, hideIcon(edge), "Hide", v -> collapse());
         return panel;
     }
 
