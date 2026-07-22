@@ -10,6 +10,7 @@
     <string name="section_sidebar">Сайдбар</string>
     <string name="section_equalizer">Эквалайзер и DSP</string>
     <string name="section_system">Системные настройки</string>
+    <string name="section_controls">Управление</string>
     <string name="now_playing_empty">Ничего не играет</string>
     <string name="queue_empty">Очередь пуста</string>
     <string name="previous_track">Назад</string>
@@ -161,6 +162,7 @@
     <string name="settings_back">Назад</string>
     <string name="settings_close">Закрыть</string>
     <string name="settings_account_summary">Код устройства, вход в Яндекс и ручной OAuth-токен</string>
+    <string name="settings_controls_summary">Сенсорное управление или навигация ТВ-пультом</string>
     <string name="settings_quality_summary">Качество онлайн-потока и постоянного кэша</string>
     <string name="settings_cache_summary">Автозагрузка избранного, условия и очистка</string>
     <string name="settings_clips_summary">Системные панели во время Волны клипов</string>
@@ -168,6 +170,12 @@
     <string name="settings_equalizer_summary">Выбор и запуск приложения обработки звука</string>
     <string name="settings_system_summary">Энергосбережение и автозапуск YMPlayer</string>
     <string name="settings_diagnostics_summary">Копирование, сохранение и очистка журнала</string>
+    <string name="control_mode_hint">Автоматический режим включает навигацию пультом на Android TV и управление одним касанием на остальных Android-устройствах. Для необычных устройств определение можно переопределить вручную.</string>
+    <string name="control_mode_auto">Авто</string>
+    <string name="control_mode_touch">Сенсор</string>
+    <string name="control_mode_remote">Пульт</string>
+    <string name="control_mode_current">Выбрано: %1$s. Сейчас используется: %2$s.</string>
+    <string name="control_mode_saved">Управление: %1$s (сейчас: %2$s)</string>
     <string name="settings_status_template">Статус: %1$s</string>
     <string name="settings_action_received">Нажато: %1$s</string>
     <string name="open_about">О приложении YMPlayer</string>
@@ -212,7 +220,7 @@
     <string name="sidebar_notification_channel">Сайдбар</string>
     <string name="sidebar_notification_title">Сайдбар YMPlayer</string>
     <string name="sidebar_notification_text">Встроенный сайдбар активен</string>
-    <string name="settings_hint">Аккаунт, воспроизведение, кэш, SideBar, DSP, системная интеграция и диагностика.</string>
+    <string name="settings_hint">Аккаунт, управление, воспроизведение, кэш, SideBar, DSP, системная интеграция и диагностика.</string>
     <string name="album_template">Альбом: %1$s</string>
     <string name="delete_playlist">Удалить</string>
     <string name="rename_playlist">Переименовать</string>

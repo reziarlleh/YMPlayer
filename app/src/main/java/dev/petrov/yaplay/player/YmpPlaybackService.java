@@ -111,6 +111,10 @@ public class YmpPlaybackService extends MediaBrowserService {
     private static final String MEDIA_ID_LIKED_CACHE = "ymp_liked_cache";
     private static final long SIDEBAR_WATCHDOG_INTERVAL_MS = 30_000L;
     private static final long POSITION_SAVE_INTERVAL_MS = 2_000L;
+    private static final long WAVE_PREFETCH_WAIT_MS = 250L;
+    private static final int WAVE_PREFETCH_WAIT_LIMIT = 20;
+    private static final int WAVE_CONTINUATION_RETRY_LIMIT = 3;
+    private static final long WAVE_CONTINUATION_RETRY_DELAY_MS = 1_000L;
     private static final int METADATA_COVER_RETRY_MAX = 4;
     private static final long METADATA_COVER_RETRY_DELAY_MS = 12_000L;
     private static final int PLAY_MODE_ORDER = 0;
@@ -153,6 +157,8 @@ public class YmpPlaybackService extends MediaBrowserService {
     private boolean sidebarWatchdogStarted;
     private boolean likedKeysLoaded;
     private boolean wavePrefetching;
+    private boolean waveAdvanceWaiting;
+    private int waveContinuationRetryCount;
     private boolean forceInitialWavePrefetch;
     private int playMode = PLAY_MODE_ORDER;
     private int currentSourceType = SOURCE_WAVE;
@@ -252,6 +258,14 @@ public class YmpPlaybackService extends MediaBrowserService {
             updateSession();
             updateNotification();
             broadcastStatus();
+            if (waveMode) {
+                Diagnostics.log(this, "YMP My Wave is skipping a MediaPlayer failure");
+                mainHandler.postDelayed(() -> {
+                    if (waveMode) {
+                        playNextInternal(true);
+                    }
+                }, 300L);
+            }
             return true;
         });
 
@@ -642,6 +656,8 @@ public class YmpPlaybackService extends MediaBrowserService {
             shuffle = false;
         }
         pendingSeekMs = 0L;
+        waveAdvanceWaiting = false;
+        waveContinuationRetryCount = 0;
         statusText = currentSourceTitle + " selected. Press Play to start.";
         updateSession();
         updateNotification();
@@ -684,6 +700,8 @@ public class YmpPlaybackService extends MediaBrowserService {
         prefetchedTrackKey = "";
         lastWaveFeedbackTrackKey = "";
         wavePrefetching = false;
+        waveAdvanceWaiting = false;
+        waveContinuationRetryCount = 0;
         forceInitialWavePrefetch = false;
         if (waveMode) {
             playMode = PLAY_MODE_ORDER;
@@ -709,6 +727,9 @@ public class YmpPlaybackService extends MediaBrowserService {
             updateNotification();
             broadcastStatus();
             return;
+        }
+        if (waveMode) {
+            waveContinuationRetryCount = 0;
         }
         if (index != queueIndex) {
             saveCurrentSourceProgress();
@@ -761,6 +782,15 @@ public class YmpPlaybackService extends MediaBrowserService {
         updateSession();
         updateNotification();
         broadcastStatus();
+        if (waveMode) {
+            Diagnostics.log(this, "YMP My Wave is skipping an unavailable track: "
+                    + (track == null ? "unknown" : track.key));
+            mainHandler.postDelayed(() -> {
+                if (waveMode) {
+                    playNextInternal(true);
+                }
+            }, 300L);
+        }
     }
 
     private void skipUnavailableLocalTrack(YandexMusicClient.Track failedTrack, Exception ex) {
@@ -856,6 +886,10 @@ public class YmpPlaybackService extends MediaBrowserService {
     }
 
     private void fetchMoreWaveThenNext(boolean fromCompletion) {
+        if (wavePrefetching) {
+            waitForWavePrefetch(fromCompletion, 0);
+            return;
+        }
         if (loading) {
             statusText = "My Wave is already loading";
             broadcastStatus();
@@ -871,6 +905,8 @@ public class YmpPlaybackService extends MediaBrowserService {
                     int next = queueIndex + 1;
                     if (next < queue.size()) {
                         playAt(next);
+                    } else if (scheduleWaveContinuationRetry(fromCompletion, "no new recommendation")) {
+                        Diagnostics.log(this, "YMP My Wave queue did not grow; automatic retry scheduled");
                     } else {
                         statusText = fromCompletion ? "My Wave has no next track yet" : "No more My Wave tracks yet";
                         loading = false;
@@ -882,9 +918,72 @@ public class YmpPlaybackService extends MediaBrowserService {
                 });
             } catch (Exception ex) {
                 Diagnostics.log(this, "YMP My Wave load-more failed", ex);
-                postStatus("My Wave load-more failed: " + ex.getMessage());
+                mainHandler.post(() -> {
+                    loading = false;
+                    if (!scheduleWaveContinuationRetry(fromCompletion, ex.getMessage())) {
+                        statusText = "My Wave load-more failed: " + ex.getMessage();
+                        updateSession();
+                        updateNotification();
+                        broadcastStatus();
+                    }
+                });
             }
         }, "YMP-MoreWave").start();
+    }
+
+    private boolean scheduleWaveContinuationRetry(boolean fromCompletion, String reason) {
+        if (!fromCompletion || !waveMode || waveContinuationRetryCount >= WAVE_CONTINUATION_RETRY_LIMIT) {
+            return false;
+        }
+        int attempt = ++waveContinuationRetryCount;
+        long delay = WAVE_CONTINUATION_RETRY_DELAY_MS * attempt;
+        loading = false;
+        statusText = "My Wave is retrying the next track (" + attempt
+                + "/" + WAVE_CONTINUATION_RETRY_LIMIT + ")";
+        updateSession();
+        updateNotification();
+        broadcastStatus();
+        Diagnostics.log(this, "YMP My Wave continuation retry scheduled: attempt=" + attempt
+                + ", delay=" + delay + "ms, reason=" + reason);
+        mainHandler.postDelayed(() -> {
+            if (!waveMode) {
+                return;
+            }
+            int next = queueIndex + 1;
+            if (next < queue.size()) {
+                playAt(next);
+            } else {
+                fetchMoreWaveThenNext(true);
+            }
+        }, delay);
+        return true;
+    }
+
+    private void waitForWavePrefetch(boolean fromCompletion, int attempt) {
+        if (waveAdvanceWaiting && attempt == 0) {
+            return;
+        }
+        waveAdvanceWaiting = true;
+        mainHandler.postDelayed(() -> {
+            if (!waveMode) {
+                waveAdvanceWaiting = false;
+                return;
+            }
+            int next = queueIndex + 1;
+            if (next < queue.size()) {
+                waveAdvanceWaiting = false;
+                playAt(next);
+                return;
+            }
+            if (wavePrefetching && attempt < WAVE_PREFETCH_WAIT_LIMIT) {
+                waitForWavePrefetch(fromCompletion, attempt + 1);
+                return;
+            }
+            waveAdvanceWaiting = false;
+            Diagnostics.log(this, "YMP My Wave reached queue tail while prefetching: waited="
+                    + (attempt * WAVE_PREFETCH_WAIT_MS) + "ms, prefetching=" + wavePrefetching);
+            fetchMoreWaveThenNext(fromCompletion);
+        }, WAVE_PREFETCH_WAIT_MS);
     }
 
     private void maybePrefetchWave() {

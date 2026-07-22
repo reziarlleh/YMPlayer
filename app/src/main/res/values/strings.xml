@@ -10,6 +10,7 @@
     <string name="section_sidebar">SideBar</string>
     <string name="section_equalizer">Equalizer and DSP</string>
     <string name="section_system">System integration</string>
+    <string name="section_controls">Controls</string>
     <string name="now_playing_empty">Nothing is playing</string>
     <string name="queue_empty">Queue is empty</string>
     <string name="play_my_wave_compact">My Wave</string>
@@ -151,6 +152,7 @@
     <string name="settings_back">Back</string>
     <string name="settings_close">Close</string>
     <string name="settings_account_summary">Device code, Yandex sign-in, and manual OAuth token</string>
+    <string name="settings_controls_summary">Touchscreen interaction or TV remote navigation</string>
     <string name="settings_quality_summary">Online stream and permanent cache quality</string>
     <string name="settings_cache_summary">Liked-track downloads, conditions, and cleanup</string>
     <string name="settings_clips_summary">System bars during Clip Wave playback</string>
@@ -158,6 +160,12 @@
     <string name="settings_equalizer_summary">Choose and launch an audio processing app</string>
     <string name="settings_system_summary">Battery management and YMPlayer autostart</string>
     <string name="settings_diagnostics_summary">Copy, save, and clear the diagnostic log</string>
+    <string name="control_mode_hint">Automatic mode uses remote navigation on Android TV and one-tap touchscreen controls on other Android devices. You can override detection for unusual hardware.</string>
+    <string name="control_mode_auto">Auto</string>
+    <string name="control_mode_touch">Touch</string>
+    <string name="control_mode_remote">Remote</string>
+    <string name="control_mode_current">Selected: %1$s. Active interaction: %2$s.</string>
+    <string name="control_mode_saved">Controls: %1$s (active: %2$s)</string>
     <string name="settings_status_template">Status: %1$s</string>
     <string name="settings_action_received">Pressed: %1$s</string>
     <string name="open_about">About YMPlayer</string>
@@ -213,7 +221,7 @@
     <string name="sidebar_notification_channel">SideBar</string>
     <string name="sidebar_notification_title">YMPlayer SideBar</string>
     <string name="sidebar_notification_text">Built-in SideBar overlay is active</string>
-    <string name="settings_hint">Account, playback, cache, SideBar, DSP, system integration, and diagnostics.</string>
+    <string name="settings_hint">Account, controls, playback, cache, SideBar, DSP, system integration, and diagnostics.</string>
     <string name="album_template">Album: %1$s</string>
     <string name="source_my_wave">My Wave</string>
     <string name="source_liked_cache">Offline mode</string>

@@ -21,6 +21,7 @@ import dev.petrov.yaplay.ymusic.YandexMusicClient;
 
 public final class YmpRepository {
     private static final int MORE_WAVE_TARGET = 1;
+    private static final int WAVE_RECOVERY_ATTEMPTS = 3;
 
     private final Context context;
     private final YandexTrackCache audioCache;
@@ -60,18 +61,76 @@ public final class YmpRepository {
         if (current == null || current.tracks.isEmpty()) {
             return loadInitialWave();
         }
+        int before = current.tracks.size();
         String cursor = current.currentCursorTrackId();
-        YandexMusicClient.WaveTracks wave = client().getMoreMyWave(current.sessionId, cursor, MORE_WAVE_TARGET);
-        if (wave.tracks.isEmpty()) {
-            Diagnostics.log(context, "YMP My Wave session returned empty load-more, restarting wave seed");
-            wave = client().getMyWave(MORE_WAVE_TARGET);
+        YandexMusicClient.WaveTracks wave = null;
+        Exception lastFailure = null;
+        boolean receivedResponse = false;
+        try {
+            wave = client().getMoreMyWave(current.sessionId, cursor, MORE_WAVE_TARGET);
+            receivedResponse = true;
+            current.append(wave.tracks, wave.sessionId, wave.firstBatchId, wave.batchIdByTrackKey);
+            if (current.tracks.size() > before) {
+                logWaveContinuation("session", before, current, wave, cursor, 0);
+                return current;
+            }
+            Diagnostics.log(context, "YMP My Wave continuation contained no new track: returned="
+                    + wave.tracks.size() + ", cursor=" + cursor + "; recovering rotor session");
+        } catch (Exception ex) {
+            lastFailure = ex;
+            Diagnostics.log(context, "YMP My Wave continuation request failed; recovering rotor session", ex);
         }
-        Diagnostics.log(context, "YMP loaded more My Wave: tracks=" + wave.tracks.size()
+
+        for (int attempt = 1; attempt <= WAVE_RECOVERY_ATTEMPTS; attempt++) {
+            try {
+                if (attempt == 1) {
+                    wave = client().getMyWaveFastStart(MORE_WAVE_TARGET);
+                } else {
+                    wave = client().getMoreMyWave(
+                            current.sessionId,
+                            current.currentCursorTrackId(),
+                            MORE_WAVE_TARGET
+                    );
+                }
+                receivedResponse = true;
+                current.append(wave.tracks, wave.sessionId, wave.firstBatchId, wave.batchIdByTrackKey);
+                if (current.tracks.size() > before) {
+                    logWaveContinuation("recovery", before, current, wave, cursor, attempt);
+                    return current;
+                }
+                Diagnostics.log(context, "YMP My Wave recovery produced no new track: attempt=" + attempt
+                        + ", returned=" + wave.tracks.size()
+                        + ", session=" + safe(wave.sessionId));
+            } catch (Exception ex) {
+                lastFailure = ex;
+                Diagnostics.log(context, "YMP My Wave recovery request failed: attempt=" + attempt, ex);
+            }
+        }
+
+        if (!receivedResponse && lastFailure != null) {
+            throw lastFailure;
+        }
+        Diagnostics.log(context, "YMP My Wave continuation exhausted without a new track: queue="
+                + current.tracks.size() + ", cursor=" + cursor);
+        return current;
+    }
+
+    private void logWaveContinuation(
+            String path,
+            int before,
+            WaveQueue current,
+            YandexMusicClient.WaveTracks wave,
+            String cursor,
+            int attempt
+    ) {
+        Diagnostics.log(context, "YMP loaded next My Wave track: path=" + path
+                + ", attempt=" + attempt
+                + ", returned=" + wave.tracks.size()
+                + ", added=" + (current.tracks.size() - before)
+                + ", queue=" + current.tracks.size()
                 + ", session=" + safe(wave.sessionId)
                 + ", batch=" + safe(wave.firstBatchId)
                 + ", cursor=" + cursor);
-        current.append(wave.tracks, wave.sessionId, wave.firstBatchId, wave.batchIdByTrackKey);
-        return current;
     }
 
     public void sendWaveRadioStarted(WaveQueue waveQueue) {

@@ -89,6 +89,7 @@ public class MainActivity extends Activity {
     private static final int SETTINGS_SECTION_EQUALIZER = 6;
     private static final int SETTINGS_SECTION_SYSTEM = 7;
     private static final int SETTINGS_SECTION_DIAGNOSTICS = 8;
+    private static final int SETTINGS_SECTION_CONTROLS = 9;
     private static final int COVER_RETRY_MAX = 4;
     private static final long COVER_RETRY_DELAY_MS = 12_000L;
 
@@ -176,11 +177,14 @@ public class MainActivity extends Activity {
         View content = buildContent();
         setContentView(content);
         installInteractiveFeedbackTree(content);
-        if (DeviceUi.isTelevision(this) && playPauseButton != null) {
+        if (DeviceUi.usesRemoteControl(this) && playPauseButton != null) {
             playPauseButton.post(playPauseButton::requestFocus);
         }
         requestNotificationPermissionIfNeeded();
-        Diagnostics.log(this, "YMPlayer MainActivity opened");
+        Diagnostics.log(this, "YMPlayer MainActivity opened: controlSetting="
+                + YmpSettings.controlMode(this)
+                + ", effective=" + (DeviceUi.usesRemoteControl(this) ? "remote" : "touch")
+                + ", television=" + DeviceUi.isTelevision(this));
         updateStatus(statusWithCache("Ready"));
     }
 
@@ -445,7 +449,7 @@ public class MainActivity extends Activity {
             libraryNavigationButton.setColorFilter(COLOR_ACCENT);
         }
         loadLibraryIfNeeded();
-        if (DeviceUi.isTelevision(this) && librarySearchButton != null) {
+        if (DeviceUi.usesRemoteControl(this) && librarySearchButton != null) {
             librarySearchButton.post(librarySearchButton::requestFocus);
         }
     }
@@ -460,7 +464,7 @@ public class MainActivity extends Activity {
         if (libraryNavigationButton != null) {
             libraryNavigationButton.setColorFilter(COLOR_TEXT);
         }
-        if (DeviceUi.isTelevision(this) && playPauseButton != null) {
+        if (DeviceUi.usesRemoteControl(this) && playPauseButton != null) {
             playPauseButton.post(playPauseButton::requestFocus);
         }
     }
@@ -2373,6 +2377,7 @@ public class MainActivity extends Activity {
             root.addView(hint, matchWrap());
 
             addCategory(root, SETTINGS_SECTION_ACCOUNT, R.string.section_account, R.string.settings_account_summary);
+            addCategory(root, SETTINGS_SECTION_CONTROLS, R.string.section_controls, R.string.settings_controls_summary);
             addCategory(root, SETTINGS_SECTION_QUALITY, R.string.section_audio_quality, R.string.settings_quality_summary);
             addCategory(root, SETTINGS_SECTION_CACHE, R.string.section_cache, R.string.settings_cache_summary);
             addCategory(root, SETTINGS_SECTION_CLIPS, R.string.section_clip_playback, R.string.settings_clips_summary);
@@ -2382,7 +2387,7 @@ public class MainActivity extends Activity {
             addCategory(root, SETTINGS_SECTION_DIAGNOSTICS, R.string.section_diagnostics, R.string.settings_diagnostics_summary);
 
             showScreen(scroll);
-            if (DeviceUi.isTelevision(MainActivity.this)) {
+            if (DeviceUi.usesRemoteControl(MainActivity.this)) {
                 View target = categoryViews.get(lastSection);
                 if (target != null) {
                     target.post(target::requestFocus);
@@ -2450,6 +2455,9 @@ public class MainActivity extends Activity {
                 case SETTINGS_SECTION_ACCOUNT:
                     addAccountSettings(root);
                     break;
+                case SETTINGS_SECTION_CONTROLS:
+                    addControlSettings(root);
+                    break;
                 case SETTINGS_SECTION_QUALITY:
                     addQualitySettings(root);
                     break;
@@ -2476,7 +2484,7 @@ public class MainActivity extends Activity {
                     return;
             }
             showScreen(scroll);
-            if (DeviceUi.isTelevision(MainActivity.this)) {
+            if (DeviceUi.usesRemoteControl(MainActivity.this)) {
                 root.post(() -> requestFirstSettingsControl(root));
             }
         }
@@ -2542,6 +2550,129 @@ public class MainActivity extends Activity {
         streamQualityButton = null;
         cacheQualityButton = null;
         equalizerPackageEdit = null;
+    }
+
+    private void addControlSettings(LinearLayout root) {
+        TextView hint = new TextView(this);
+        hint.setText(R.string.control_mode_hint);
+        hint.setTextColor(COLOR_MUTED);
+        hint.setTextSize(14);
+        hint.setLineSpacing(dp(2), 1f);
+        root.addView(hint, spaced());
+
+        LinearLayout modes = row();
+        Button automatic = pillButton(getString(R.string.control_mode_auto), COLOR_SURFACE_2, COLOR_TEXT);
+        Button touch = pillButton(getString(R.string.control_mode_touch), COLOR_SURFACE_2, COLOR_TEXT);
+        Button remote = pillButton(getString(R.string.control_mode_remote), COLOR_SURFACE_2, COLOR_TEXT);
+        modes.addView(automatic, rowButtonParams());
+        modes.addView(touch, rowButtonParams());
+        modes.addView(remote, rowButtonParams());
+        root.addView(modes, spaced());
+
+        TextView current = new TextView(this);
+        current.setTextColor(COLOR_TEXT);
+        current.setTextSize(15);
+        current.setPadding(dp(12), dp(10), dp(12), dp(10));
+        current.setBackground(panelBg(COLOR_SURFACE, dp(8), COLOR_STROKE));
+        root.addView(current, spaced());
+
+        automatic.setOnClickListener(v -> saveControlMode(
+                YmpSettings.CONTROL_MODE_AUTO,
+                automatic,
+                automatic,
+                touch,
+                remote,
+                current,
+                root
+        ));
+        touch.setOnClickListener(v -> saveControlMode(
+                YmpSettings.CONTROL_MODE_TOUCH,
+                touch,
+                automatic,
+                touch,
+                remote,
+                current,
+                root
+        ));
+        remote.setOnClickListener(v -> saveControlMode(
+                YmpSettings.CONTROL_MODE_REMOTE,
+                remote,
+                automatic,
+                touch,
+                remote,
+                current,
+                root
+        ));
+        updateControlModeViews(automatic, touch, remote, current);
+    }
+
+    private void saveControlMode(
+            String mode,
+            Button selectedButton,
+            Button automatic,
+            Button touch,
+            Button remote,
+            TextView current,
+            View settingsRoot
+    ) {
+        YmpSettings.setControlMode(this, mode);
+        updateControlModeViews(automatic, touch, remote, current);
+        installInteractiveFeedbackTree(getWindow().getDecorView());
+        installInteractiveFeedbackTree(settingsRoot.getRootView());
+
+        boolean remoteControl = DeviceUi.usesRemoteControl(this);
+        View focused = settingsRoot.getRootView().findFocus();
+        if (!remoteControl && focused != null && !(focused instanceof EditText)) {
+            focused.clearFocus();
+        } else if (remoteControl) {
+            selectedButton.post(selectedButton::requestFocus);
+        }
+
+        String selectedName = controlModeName(mode);
+        String effectiveName = getString(remoteControl
+                ? R.string.control_mode_remote
+                : R.string.control_mode_touch);
+        String message = getString(R.string.control_mode_saved, selectedName, effectiveName);
+        updateSettingsFeedback(message);
+        Toast.makeText(this, message, Toast.LENGTH_SHORT).show();
+        Diagnostics.log(this, "YMP control mode changed: setting=" + mode
+                + ", effective=" + (remoteControl ? "remote" : "touch")
+                + ", television=" + DeviceUi.isTelevision(this));
+    }
+
+    private void updateControlModeViews(
+            Button automatic,
+            Button touch,
+            Button remote,
+            TextView current
+    ) {
+        String mode = YmpSettings.controlMode(this);
+        updateControlModeButton(automatic, YmpSettings.CONTROL_MODE_AUTO.equals(mode));
+        updateControlModeButton(touch, YmpSettings.CONTROL_MODE_TOUCH.equals(mode));
+        updateControlModeButton(remote, YmpSettings.CONTROL_MODE_REMOTE.equals(mode));
+        String effectiveName = getString(DeviceUi.usesRemoteControl(this)
+                ? R.string.control_mode_remote
+                : R.string.control_mode_touch);
+        current.setText(getString(R.string.control_mode_current, controlModeName(mode), effectiveName));
+    }
+
+    private void updateControlModeButton(Button button, boolean selected) {
+        button.setTextColor(selected ? COLOR_BG : COLOR_TEXT);
+        setInteractiveBackground(
+                button,
+                panelBg(selected ? COLOR_ACCENT : COLOR_SURFACE_2, dp(13), 0x00000000),
+                dp(13)
+        );
+    }
+
+    private String controlModeName(String mode) {
+        if (YmpSettings.CONTROL_MODE_TOUCH.equals(mode)) {
+            return getString(R.string.control_mode_touch);
+        }
+        if (YmpSettings.CONTROL_MODE_REMOTE.equals(mode)) {
+            return getString(R.string.control_mode_remote);
+        }
+        return getString(R.string.control_mode_auto);
     }
 
     private void addQualitySettings(LinearLayout root) {
@@ -4178,8 +4309,14 @@ public class MainActivity extends Activity {
         view.animate().cancel();
         view.setScaleX(1f);
         view.setScaleY(1f);
-        view.setFocusable(true);
-        view.setFocusableInTouchMode(true);
+        boolean textInput = view instanceof EditText
+                || (view instanceof TextView && ((TextView) view).isTextSelectable());
+        boolean focusable = DeviceUi.usesRemoteControl(this) || textInput;
+        if (!focusable && view.hasFocus()) {
+            view.clearFocus();
+        }
+        view.setFocusable(focusable);
+        view.setFocusableInTouchMode(focusable);
         view.setDefaultFocusHighlightEnabled(false);
         ensureInteractiveBackground(view, radiusPx);
         if (Boolean.TRUE.equals(view.getTag(R.id.ymp_interactive_feedback_installed))) {

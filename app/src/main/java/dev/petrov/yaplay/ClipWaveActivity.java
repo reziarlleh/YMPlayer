@@ -174,7 +174,9 @@ public final class ClipWaveActivity extends Activity {
         applySystemBarsPreference();
         mainHandler.post(progressUpdateRunnable);
 
-        Diagnostics.log(this, "YMP Clip Wave opened");
+        Diagnostics.log(this, "YMP Clip Wave opened: controlSetting="
+                + YmpSettings.controlMode(this)
+                + ", effective=" + (DeviceUi.usesRemoteControl(this) ? "remote" : "touch"));
         stopAudioPlayer();
         if (accessToken.isEmpty()) {
             showFatalError(getString(R.string.clip_wave_login_required));
@@ -223,7 +225,9 @@ public final class ClipWaveActivity extends Activity {
             }
             return true;
         }
-        if (isRemoteNavigationKey(keyCode) && event.getAction() == KeyEvent.ACTION_DOWN) {
+        if (DeviceUi.usesRemoteControl(this)
+                && isRemoteNavigationKey(keyCode)
+                && event.getAction() == KeyEvent.ACTION_DOWN) {
             if (overlayView != null && overlayView.getVisibility() != View.VISIBLE) {
                 showOverlay(true);
                 if (playPauseButton != null) {
@@ -1746,8 +1750,12 @@ public final class ClipWaveActivity extends Activity {
         view.animate().cancel();
         view.setScaleX(1f);
         view.setScaleY(1f);
-        view.setFocusable(true);
-        view.setFocusableInTouchMode(true);
+        boolean remoteControl = DeviceUi.usesRemoteControl(this);
+        if (!remoteControl && view.hasFocus()) {
+            view.clearFocus();
+        }
+        view.setFocusable(remoteControl);
+        view.setFocusableInTouchMode(remoteControl);
         view.setDefaultFocusHighlightEnabled(false);
         ensureInteractiveBackground(view, radiusPx);
         if (Boolean.TRUE.equals(view.getTag(R.id.ymp_interactive_feedback_installed))) {

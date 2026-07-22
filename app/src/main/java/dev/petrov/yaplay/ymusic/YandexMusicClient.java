@@ -361,8 +361,10 @@ public final class YandexMusicClient {
         int target = Math.max(1, targetTracks);
         List<String> trackIds = new ArrayList<>();
         Map<String, String> batchIdByTrackKey = new HashMap<>();
+        Set<String> seenTrackIds = new HashSet<>();
         String batchId = "";
         String cursor = currentTrackId;
+        seenTrackIds.add(trackIdOnly(currentTrackId));
 
         for (int batch = 0; batch < 16 && trackIds.size() < target; batch++) {
             JSONObject body = new JSONObject();
@@ -375,18 +377,32 @@ public final class YandexMusicClient {
             if (ids.isEmpty()) {
                 break;
             }
+            String nextCursor = "";
             for (String id : ids) {
                 if (trackIds.size() >= target) {
                     break;
                 }
-                if (!trackIds.contains(id)) {
-                    trackIds.add(id);
-                    if (!batchId.isEmpty()) {
-                        batchIdByTrackKey.put(id, batchId);
-                    }
+                String normalizedId = trackIdOnly(id);
+                if (normalizedId.isEmpty() || !seenTrackIds.add(normalizedId)) {
+                    continue;
+                }
+                trackIds.add(id);
+                if (nextCursor.isEmpty()) {
+                    nextCursor = id;
+                }
+                if (!batchId.isEmpty()) {
+                    batchIdByTrackKey.put(id, batchId);
                 }
             }
-            cursor = ids.get(0);
+            if (!nextCursor.isEmpty()) {
+                cursor = nextCursor;
+            } else {
+                String fallbackCursor = ids.get(ids.size() - 1);
+                if (trackIdOnly(cursor).equals(trackIdOnly(fallbackCursor))) {
+                    break;
+                }
+                cursor = fallbackCursor;
+            }
         }
 
         List<Track> tracks = getTracks(trackIds);
@@ -1086,6 +1102,15 @@ public final class YandexMusicClient {
             }
         }
         return ids;
+    }
+
+    private static String trackIdOnly(String value) {
+        if (value == null) {
+            return "";
+        }
+        String normalized = value.trim();
+        int separator = normalized.indexOf(':');
+        return separator > 0 ? normalized.substring(0, separator) : normalized;
     }
 
     private static List<Track> tracksFromSequence(JSONArray sequence) {
