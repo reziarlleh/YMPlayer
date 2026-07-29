@@ -2044,6 +2044,9 @@ public class MainActivity extends Activity {
     private void showAboutDialog() {
         Dialog dialog = new Dialog(this);
         dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+        ScrollView scroll = new ScrollView(this);
+        scroll.setFillViewport(false);
+        scroll.setClipToPadding(false);
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setGravity(Gravity.CENTER_HORIZONTAL);
@@ -2078,17 +2081,60 @@ public class MainActivity extends Activity {
         author.setTextSize(14);
         author.setGravity(Gravity.CENTER);
         LinearLayout.LayoutParams authorParams = matchWrap();
-        authorParams.setMargins(0, dp(4), 0, dp(18));
+        authorParams.setMargins(0, dp(4), 0, dp(14));
         root.addView(author, authorParams);
 
-        Button close = pillButton(getString(R.string.settings_close), COLOR_ACCENT, COLOR_BG);
+        TextView donation = new TextView(this);
+        donation.setText(R.string.donation_message);
+        donation.setTextColor(COLOR_TEXT);
+        donation.setTextSize(14);
+        donation.setGravity(Gravity.CENTER);
+        donation.setLineSpacing(dp(2), 1f);
+        root.addView(donation, matchWrap());
+
+        ImageView donationQr = new ImageView(this);
+        donationQr.setImageResource(R.drawable.donate_qr);
+        donationQr.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        donationQr.setAdjustViewBounds(true);
+        donationQr.setPadding(dp(7), dp(7), dp(7), dp(7));
+        donationQr.setBackgroundColor(Color.WHITE);
+        donationQr.setClickable(true);
+        donationQr.setContentDescription(getString(R.string.donation_qr_description));
+        donationQr.setTooltipText(getString(R.string.donation_qr_description));
+        donationQr.setOnClickListener(v -> openDonationPage());
+        installInteractiveFeedback(donationQr, dp(8));
+        LinearLayout.LayoutParams qrParams = new LinearLayout.LayoutParams(dp(164), dp(164));
+        qrParams.setMargins(0, dp(12), 0, dp(12));
+        root.addView(donationQr, qrParams);
+
+        Button support = pillButton(getString(R.string.donation_button), COLOR_ACCENT, COLOR_BG);
+        support.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        support.setOnClickListener(v -> openDonationPage());
+        root.addView(support, matchWrap());
+
+        Button close = pillButton(getString(R.string.settings_close), COLOR_SURFACE_2, COLOR_TEXT);
         close.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         close.setOnClickListener(v -> dialog.dismiss());
-        root.addView(close, matchWrap());
+        LinearLayout.LayoutParams closeParams = matchWrap();
+        closeParams.setMargins(0, dp(8), 0, 0);
+        root.addView(close, closeParams);
 
-        dialog.setContentView(root);
-        prepareDialogWindow(dialog, 420);
+        scroll.addView(root, new ScrollView.LayoutParams(
+                ScrollView.LayoutParams.MATCH_PARENT,
+                ScrollView.LayoutParams.WRAP_CONTENT
+        ));
+        dialog.setContentView(scroll);
+        prepareDialogWindow(dialog, 460);
         dialog.show();
+    }
+
+    private void openDonationPage() {
+        try {
+            startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(getString(R.string.donation_url))));
+        } catch (Exception ex) {
+            Diagnostics.log(this, "YMP donation page open failed", ex);
+            Toast.makeText(this, R.string.donation_open_failed, Toast.LENGTH_SHORT).show();
+        }
     }
 
     @SuppressWarnings("deprecation")

@@ -172,6 +172,11 @@
     <string name="about_version">Version %1$s</string>
     <string name="about_author">Author: %1$s</string>
     <string name="app_author">Andrey Petrov</string>
+    <string name="donation_url" translatable="false">https://donate.stream/donate_6a60559cd9e35</string>
+    <string name="donation_message">If you enjoy the app, you can thank the author with any amount you choose.</string>
+    <string name="donation_button">Support the author</string>
+    <string name="donation_qr_description">QR code to support the author</string>
+    <string name="donation_open_failed">Could not open the support page</string>
     <string name="previous_track">Prev</string>
     <string name="play_pause">Play/Pause</string>
     <string name="next_track">Next</string>

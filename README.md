@@ -9,14 +9,14 @@ Android 10 и новее. Приложение рассчитано на сма�
 магнитолы, поддерживает системные медиакнопки и делает основной упор на
 "Мою волну", оффлайн-избранное и удобное управление в дороге.
 
-Текущая версия: **1.0.0-beta.8**. Основные функции завершены; статус beta оставлен
+Текущая версия: **1.0.0-beta.9**. Основные функции завершены; статус beta оставлен
 для длительного тестирования на разных устройствах и версиях сервисов Яндекса.
 
 ## Скачать
 
-- [YMPlayer 1.0.0-beta.8 в GitHub Releases](https://github.com/reziarlleh/YMPlayer/releases/tag/v1.0.0-beta.8)
-- [Скачать APK](https://github.com/reziarlleh/YMPlayer/releases/download/v1.0.0-beta.8/YMPlayer-v1.0.0-beta.8-release-b108.apk)
-- [APK в архиве репозитория](releases/1.0.0-beta.8/YMPlayer-v1.0.0-beta.8-release-b108.apk)
+- [YMPlayer 1.0.0-beta.9 в GitHub Releases](https://github.com/reziarlleh/YMPlayer/releases/tag/v1.0.0-beta.9)
+- [Скачать APK](https://github.com/reziarlleh/YMPlayer/releases/download/v1.0.0-beta.9/YMPlayer-v1.0.0-beta.9-release-b109.apk)
+- [APK в архиве репозитория](releases/1.0.0-beta.9/YMPlayer-v1.0.0-beta.9-release-b109.apk)
 
 APK поддерживает обновление ранее установленных версий YMPlayer без очистки
 настроек, авторизации и локального кэша.
@@ -109,6 +109,19 @@ YMPlayer использует системный механизм доступа
 В настройках можно скопировать журнал или сохранить его текстовым файлом с
 датой и временем в папку `Downloads`. Это помогает разбирать редкие ошибки
 сети, конкретной прошивки магнитолы или изменений сервиса Яндекса.
+
+## Поддержать автора
+
+Если вам понравилось приложение, можете поблагодарить автора любой суммой на
+ваше усмотрение.
+
+<p align="center">
+  <a href="https://donate.stream/donate_6a60559cd9e35">
+    <img src="app/src/main/res/drawable-nodpi/donate_qr.png" width="200" alt="Поддержать автора YMPlayer">
+  </a>
+  <br>
+  <a href="https://donate.stream/donate_6a60559cd9e35"><strong>Поддержать автора</strong></a>
+</p>
 
 ## Важно
 

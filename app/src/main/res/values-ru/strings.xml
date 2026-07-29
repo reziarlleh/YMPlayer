@@ -182,6 +182,10 @@
     <string name="about_version">Версия %1$s</string>
     <string name="about_author">Автор: %1$s</string>
     <string name="app_author">Андрей Петров</string>
+    <string name="donation_message">Если вам понравилось приложение, можете поблагодарить автора любой суммой на ваше усмотрение.</string>
+    <string name="donation_button">Поддержать автора</string>
+    <string name="donation_qr_description">QR-код для поддержки автора</string>
+    <string name="donation_open_failed">Не удалось открыть страницу поддержки</string>
     <string name="enable_embedded_sidebar">Включить встроенный сайдбар поверх экрана</string>
     <string name="sidebar_auto_hide">Автоматически скрывать сайдбар при бездействии</string>
     <string name="clip_system_bars_auto_hide">Автоскрытие системной панели при воспроизведении клипов</string>
