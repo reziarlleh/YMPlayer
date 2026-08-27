@@ -10,8 +10,8 @@ android {
         applicationId "dev.petrov.yaplay"
         minSdk 29
         targetSdk 35
-        versionCode 109
-        versionName "1.0.0-beta.9"
+        versionCode 110
+        versionName "1.0.0-beta.10"
     }
 
     buildTypes {
@@ -44,5 +44,6 @@ dependencies {
     implementation "androidx.media3:media3-exoplayer-dash:${media3Version}"
     implementation "androidx.media3:media3-exoplayer-hls:${media3Version}"
     implementation "androidx.media3:media3-ui:${media3Version}"
+    implementation "androidx.core:core:1.15.0"
     implementation "net.jthink:jaudiotagger:3.0.1"
 }

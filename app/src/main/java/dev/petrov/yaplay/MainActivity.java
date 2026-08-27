@@ -50,6 +50,7 @@ import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import java.io.File;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -67,6 +68,7 @@ import dev.petrov.yaplay.player.YmpArtworkCache;
 import dev.petrov.yaplay.player.YmpPlaybackService;
 import dev.petrov.yaplay.player.YmpRepository;
 import dev.petrov.yaplay.player.YmpSettings;
+import dev.petrov.yaplay.update.AppUpdateManager;
 import dev.petrov.yaplay.ymusic.TokenStore;
 import dev.petrov.yaplay.ymusic.YandexMusicClient;
 
@@ -90,6 +92,8 @@ public class MainActivity extends Activity {
     private static final int SETTINGS_SECTION_SYSTEM = 7;
     private static final int SETTINGS_SECTION_DIAGNOSTICS = 8;
     private static final int SETTINGS_SECTION_CONTROLS = 9;
+    private static final int SETTINGS_SECTION_UPDATES = 10;
+    private static final int SETTINGS_ACTION_ABOUT = 11;
     private static final int COVER_RETRY_MAX = 4;
     private static final long COVER_RETRY_DELAY_MS = 12_000L;
 
@@ -131,6 +135,7 @@ public class MainActivity extends Activity {
     private CheckBox sidebarAutoHideBox;
     private CheckBox clipSystemBarsAutoHideBox;
     private CheckBox autoCacheLikedBox;
+    private CheckBox autoCheckUpdatesBox;
     private Button streamQualityButton;
     private Button cacheQualityButton;
     private EditText equalizerPackageEdit;
@@ -170,6 +175,7 @@ public class MainActivity extends Activity {
     private float swipeStartX;
     private float swipeStartY;
     private int searchRequestGeneration;
+    private boolean updateCheckRunning;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -186,6 +192,22 @@ public class MainActivity extends Activity {
                 + ", effective=" + (DeviceUi.usesRemoteControl(this) ? "remote" : "touch")
                 + ", television=" + DeviceUi.isTelevision(this));
         updateStatus(statusWithCache("Ready"));
+        if (YmpSettings.shouldAutoCheckUpdates(this, System.currentTimeMillis())) {
+            statusView.postDelayed(() -> checkForAppUpdate(false), 1_200L);
+        }
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        try {
+            if (AppUpdateManager.resumePendingInstall(this)) {
+                updateStatus(getString(R.string.update_installer_opened));
+            }
+        } catch (Exception ex) {
+            Diagnostics.log(this, "YMP pending update install failed", ex);
+            updateStatus(getString(R.string.update_install_failed, safeError(ex)));
+        }
     }
 
     @Override
@@ -2392,7 +2414,7 @@ public class MainActivity extends Activity {
         private final Button back;
         private final Map<Integer, View> categoryViews = new LinkedHashMap<>();
         private int currentSection;
-        private int lastSection = SETTINGS_SECTION_ACCOUNT;
+        private int lastSection = SETTINGS_ACTION_ABOUT;
 
         SettingsNavigator(FrameLayout host, TextView title, Button back) {
             this.host = host;
@@ -2422,7 +2444,18 @@ public class MainActivity extends Activity {
             hint.setLineSpacing(dp(2), 1f);
             root.addView(hint, matchWrap());
 
+            addActionCategory(
+                    root,
+                    SETTINGS_ACTION_ABOUT,
+                    R.string.open_about,
+                    R.string.settings_about_summary,
+                    v -> {
+                        lastSection = SETTINGS_ACTION_ABOUT;
+                        showAboutDialog();
+                    }
+            );
             addCategory(root, SETTINGS_SECTION_ACCOUNT, R.string.section_account, R.string.settings_account_summary);
+            addCategory(root, SETTINGS_SECTION_UPDATES, R.string.section_updates, R.string.settings_updates_summary);
             addCategory(root, SETTINGS_SECTION_CONTROLS, R.string.section_controls, R.string.settings_controls_summary);
             addCategory(root, SETTINGS_SECTION_QUALITY, R.string.section_audio_quality, R.string.settings_quality_summary);
             addCategory(root, SETTINGS_SECTION_CACHE, R.string.section_cache, R.string.settings_cache_summary);
@@ -2442,6 +2475,16 @@ public class MainActivity extends Activity {
         }
 
         private void addCategory(LinearLayout root, int section, int titleRes, int summaryRes) {
+            addActionCategory(root, section, titleRes, summaryRes, v -> showSection(section, titleRes));
+        }
+
+        private void addActionCategory(
+                LinearLayout root,
+                int section,
+                int titleRes,
+                int summaryRes,
+                View.OnClickListener listener
+        ) {
             LinearLayout category = new LinearLayout(MainActivity.this);
             category.setOrientation(LinearLayout.HORIZONTAL);
             category.setGravity(Gravity.CENTER_VERTICAL);
@@ -2452,7 +2495,7 @@ public class MainActivity extends Activity {
             category.setContentDescription(getString(titleRes));
             category.setDescendantFocusability(ViewGroup.FOCUS_BLOCK_DESCENDANTS);
             installInteractiveFeedback(category, dp(8));
-            category.setOnClickListener(v -> showSection(section, titleRes));
+            category.setOnClickListener(listener);
 
             LinearLayout labels = new LinearLayout(MainActivity.this);
             labels.setOrientation(LinearLayout.VERTICAL);
@@ -2500,6 +2543,9 @@ public class MainActivity extends Activity {
             switch (section) {
                 case SETTINGS_SECTION_ACCOUNT:
                     addAccountSettings(root);
+                    break;
+                case SETTINGS_SECTION_UPDATES:
+                    addUpdateSettings(root);
                     break;
                 case SETTINGS_SECTION_CONTROLS:
                     addControlSettings(root);
@@ -2593,6 +2639,7 @@ public class MainActivity extends Activity {
         sidebarAutoHideBox = null;
         clipSystemBarsAutoHideBox = null;
         autoCacheLikedBox = null;
+        autoCheckUpdatesBox = null;
         streamQualityButton = null;
         cacheQualityButton = null;
         equalizerPackageEdit = null;
@@ -2819,6 +2866,247 @@ public class MainActivity extends Activity {
             Diagnostics.log(this, "YMP token cleared");
             updateStatus(statusWithCache("Token cleared"));
         });
+    }
+
+    private void addUpdateSettings(LinearLayout root) {
+        TextView currentVersion = new TextView(this);
+        currentVersion.setText(getString(R.string.update_current_version, installedVersionName()));
+        currentVersion.setTextColor(COLOR_TEXT);
+        currentVersion.setTextSize(16);
+        currentVersion.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        currentVersion.setPadding(dp(12), dp(11), dp(12), dp(11));
+        currentVersion.setBackground(panelBg(COLOR_SURFACE, dp(8), COLOR_STROKE));
+        root.addView(currentVersion, spaced());
+
+        autoCheckUpdatesBox = checkbox(R.string.auto_check_updates);
+        autoCheckUpdatesBox.setChecked(YmpSettings.isAutoCheckUpdatesEnabled(this));
+        autoCheckUpdatesBox.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            YmpSettings.setAutoCheckUpdatesEnabled(this, isChecked);
+            String state = getString(isChecked ? R.string.setting_enabled : R.string.setting_disabled);
+            String message = getString(R.string.auto_check_updates_saved, state);
+            Diagnostics.log(this, "YMP automatic update check saved: enabled=" + isChecked);
+            updateStatus(message);
+            Toast.makeText(this, message, Toast.LENGTH_SHORT).show();
+        });
+        root.addView(autoCheckUpdatesBox, spaced());
+
+        TextView sources = new TextView(this);
+        sources.setText(R.string.update_sources_hint);
+        sources.setTextColor(COLOR_MUTED);
+        sources.setTextSize(14);
+        sources.setLineSpacing(dp(2), 1f);
+        root.addView(sources, spaced());
+
+        addButton(root, R.string.check_for_updates, v -> checkForAppUpdate(true));
+    }
+
+    private void checkForAppUpdate(boolean manual) {
+        if (updateCheckRunning) {
+            if (manual) {
+                updateStatus(getString(R.string.update_check_already_running));
+            }
+            return;
+        }
+        updateCheckRunning = true;
+        if (manual) {
+            updateStatus(getString(R.string.update_checking));
+        }
+        Diagnostics.log(this, "YMP app update check started: manual=" + manual);
+        boolean started = AppUpdateManager.checkAsync(this, new AppUpdateManager.CheckCallback() {
+            @Override
+            public void onResult(AppUpdateManager.UpdateInfo info, boolean updateAvailable) {
+                updateCheckRunning = false;
+                YmpSettings.markUpdateCheckSucceeded(MainActivity.this, System.currentTimeMillis());
+                Diagnostics.log(MainActivity.this, "YMP app update check complete: available="
+                        + updateAvailable + ", remote=" + info.versionName + " (" + info.versionCode + ")"
+                        + ", manifest=" + info.manifestUrl);
+                if (!canUpdateActivityUi()) {
+                    return;
+                }
+                if (updateAvailable) {
+                    showUpdateAvailableDialog(info);
+                } else if (manual) {
+                    String message = getString(R.string.update_up_to_date, installedVersionName());
+                    updateStatus(message);
+                    Toast.makeText(MainActivity.this, message, Toast.LENGTH_SHORT).show();
+                }
+            }
+
+            @Override
+            public void onError(String error) {
+                updateCheckRunning = false;
+                Diagnostics.log(MainActivity.this, "YMP app update check failed: " + error);
+                if (manual && canUpdateActivityUi()) {
+                    String message = getString(R.string.update_check_failed, error);
+                    updateStatus(message);
+                    Toast.makeText(MainActivity.this, message, Toast.LENGTH_LONG).show();
+                }
+            }
+        });
+        if (!started) {
+            updateCheckRunning = false;
+            if (manual) {
+                updateStatus(getString(R.string.update_check_already_running));
+            }
+        }
+    }
+
+    private void showUpdateAvailableDialog(AppUpdateManager.UpdateInfo info) {
+        Dialog dialog = new Dialog(this);
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+
+        ScrollView scroll = new ScrollView(this);
+        scroll.setFillViewport(false);
+        LinearLayout root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setPadding(dp(20), dp(18), dp(20), dp(20));
+        root.setBackgroundColor(COLOR_BG);
+        root.addView(sectionTitle(getString(R.string.update_available_title)), matchWrap());
+
+        TextView version = new TextView(this);
+        version.setText(getString(
+                R.string.update_available_version,
+                info.versionName,
+                installedVersionName()
+        ));
+        version.setTextColor(COLOR_ACCENT);
+        version.setTextSize(16);
+        version.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        root.addView(version, spaced());
+
+        if (!info.releaseNotes.isEmpty()) {
+            TextView notes = new TextView(this);
+            notes.setText(info.releaseNotes);
+            notes.setTextColor(COLOR_TEXT);
+            notes.setTextSize(14);
+            notes.setLineSpacing(dp(2), 1f);
+            notes.setPadding(dp(12), dp(11), dp(12), dp(11));
+            notes.setBackground(panelBg(COLOR_SURFACE, dp(8), COLOR_STROKE));
+            root.addView(notes, spaced());
+        }
+
+        TextView sourceHint = new TextView(this);
+        sourceHint.setText(R.string.update_download_fallback_hint);
+        sourceHint.setTextColor(COLOR_MUTED);
+        sourceHint.setTextSize(13);
+        sourceHint.setLineSpacing(dp(2), 1f);
+        root.addView(sourceHint, spaced());
+
+        Button download = pillButton(getString(R.string.download_update), COLOR_ACCENT, COLOR_BG);
+        download.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        download.setOnClickListener(v -> {
+            dialog.dismiss();
+            downloadAppUpdate(info, false);
+        });
+        root.addView(download, spaced());
+
+        if (info.hasAlternativeDownload()) {
+            Button alternative = pillButton(
+                    getString(R.string.download_update_alternative),
+                    COLOR_ACCENT_2,
+                    COLOR_BG
+            );
+            alternative.setOnClickListener(v -> {
+                dialog.dismiss();
+                downloadAppUpdate(info, true);
+            });
+            root.addView(alternative, spaced());
+        }
+
+        Button later = pillButton(getString(R.string.update_later), COLOR_SURFACE_2, COLOR_TEXT);
+        later.setOnClickListener(v -> dialog.dismiss());
+        root.addView(later, spaced());
+
+        scroll.addView(root, new ScrollView.LayoutParams(
+                ScrollView.LayoutParams.MATCH_PARENT,
+                ScrollView.LayoutParams.WRAP_CONTENT
+        ));
+        dialog.setContentView(scroll);
+        prepareDialogWindow(dialog, 560);
+        dialog.setOnShowListener(d -> {
+            installInteractiveFeedbackTree(scroll);
+            if (DeviceUi.usesRemoteControl(this)) {
+                download.requestFocus();
+            }
+        });
+        dialog.show();
+    }
+
+    private void downloadAppUpdate(AppUpdateManager.UpdateInfo info, boolean preferAlternative) {
+        String startMessage = getString(R.string.update_download_started, info.versionName);
+        updateStatus(startMessage);
+        Toast.makeText(this, startMessage, Toast.LENGTH_SHORT).show();
+        Diagnostics.log(this, "YMP app update download started: version=" + info.versionName
+                + ", preferAlternative=" + preferAlternative);
+        boolean started = AppUpdateManager.downloadAsync(
+                this,
+                info,
+                preferAlternative,
+                new AppUpdateManager.DownloadCallback() {
+                    @Override
+                    public void onProgress(int percent, String sourceHost) {
+                        if (!canUpdateActivityUi()) {
+                            return;
+                        }
+                        updateStatus(percent >= 0
+                                ? getString(R.string.update_download_progress, percent, sourceHost)
+                                : getString(R.string.update_download_progress_unknown, sourceHost));
+                    }
+
+                    @Override
+                    public void onReady(File apk, boolean usedAlternative) {
+                        Diagnostics.log(MainActivity.this, "YMP app update downloaded: file="
+                                + apk.getName() + ", bytes=" + apk.length()
+                                + ", alternative=" + usedAlternative);
+                        if (!canUpdateActivityUi()) {
+                            return;
+                        }
+                        try {
+                            AppUpdateManager.InstallResult result =
+                                    AppUpdateManager.requestInstall(MainActivity.this, apk);
+                            if (result == AppUpdateManager.InstallResult.PERMISSION_REQUIRED) {
+                                String message = getString(R.string.update_install_permission_required);
+                                updateStatus(message);
+                                Toast.makeText(MainActivity.this, message, Toast.LENGTH_LONG).show();
+                            } else {
+                                updateStatus(getString(R.string.update_installer_opened));
+                            }
+                        } catch (Exception ex) {
+                            Diagnostics.log(MainActivity.this, "YMP app update installer failed", ex);
+                            String message = getString(R.string.update_install_failed, safeError(ex));
+                            updateStatus(message);
+                            Toast.makeText(MainActivity.this, message, Toast.LENGTH_LONG).show();
+                        }
+                    }
+
+                    @Override
+                    public void onError(String error) {
+                        Diagnostics.log(MainActivity.this, "YMP app update download failed: " + error);
+                        if (canUpdateActivityUi()) {
+                            String message = getString(R.string.update_download_failed, error);
+                            updateStatus(message);
+                            Toast.makeText(MainActivity.this, message, Toast.LENGTH_LONG).show();
+                        }
+                    }
+                }
+        );
+        if (!started) {
+            updateStatus(getString(R.string.update_download_already_running));
+        }
+    }
+
+    private boolean canUpdateActivityUi() {
+        return !isFinishing() && !isDestroyed();
+    }
+
+    private static String safeError(Throwable error) {
+        if (error == null) {
+            return "unknown error";
+        }
+        String message = error.getMessage();
+        return message == null || message.trim().isEmpty()
+                ? error.getClass().getSimpleName()
+                : message.trim();
     }
 
     private void addCacheSettings(LinearLayout root) {

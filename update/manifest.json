@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "packageName": "dev.petrov.yaplay",
+  "versionCode": 110,
+  "versionName": "1.0.0-beta.10",
+  "minSdk": 29,
+  "publishedAt": "2026-08-27T13:30:00+05:00",
+  "releasePageUrl": "https://github.com/reziarlleh/YMPlayer/releases/tag/v1.0.0-beta.10",
+  "releaseNotes": "Добавлена встроенная проверка обновлений с автоматическим резервным источником. Пункт «О приложении» перенесен в начало настроек.",
+  "apk": {
+    "primaryUrl": "https://github.com/reziarlleh/YMPlayer/releases/download/v1.0.0-beta.10/YMPlayer-v1.0.0-beta.10-release-b110.apk",
+    "alternativeUrl": "https://cdn.jsdelivr.net/gh/reziarlleh/YMPlayer@v1.0.0-beta.10/releases/1.0.0-beta.10/YMPlayer-v1.0.0-beta.10-release-b110.apk",
+    "sizeBytes": 14312590,
+    "sha256": "919a544b6d391e4fc98b665287eccd8d0ea5fad42075e6fb9bd8cdab4957903b"
+  }
+}

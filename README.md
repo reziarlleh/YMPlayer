@@ -9,17 +9,26 @@ Android 10 и новее. Приложение рассчитано на сма�
 магнитолы, поддерживает системные медиакнопки и делает основной упор на
 "Мою волну", оффлайн-избранное и удобное управление в дороге.
 
-Текущая версия: **1.0.0-beta.9**. Основные функции завершены; статус beta оставлен
+Текущая версия: **1.0.0-beta.10**. Основные функции завершены; статус beta оставлен
 для длительного тестирования на разных устройствах и версиях сервисов Яндекса.
 
 ## Скачать
 
-- [YMPlayer 1.0.0-beta.9 в GitHub Releases](https://github.com/reziarlleh/YMPlayer/releases/tag/v1.0.0-beta.9)
-- [Скачать APK](https://github.com/reziarlleh/YMPlayer/releases/download/v1.0.0-beta.9/YMPlayer-v1.0.0-beta.9-release-b109.apk)
-- [APK в архиве репозитория](releases/1.0.0-beta.9/YMPlayer-v1.0.0-beta.9-release-b109.apk)
+- [YMPlayer 1.0.0-beta.10 в GitHub Releases](https://github.com/reziarlleh/YMPlayer/releases/tag/v1.0.0-beta.10)
+- [Скачать APK](https://github.com/reziarlleh/YMPlayer/releases/download/v1.0.0-beta.10/YMPlayer-v1.0.0-beta.10-release-b110.apk)
+- [Резервная загрузка через jsDelivr](https://cdn.jsdelivr.net/gh/reziarlleh/YMPlayer@v1.0.0-beta.10/releases/1.0.0-beta.10/YMPlayer-v1.0.0-beta.10-release-b110.apk)
+- [APK в архиве репозитория](releases/1.0.0-beta.10/YMPlayer-v1.0.0-beta.10-release-b110.apk)
 
 APK поддерживает обновление ранее установленных версий YMPlayer без очистки
 настроек, авторизации и локального кэша.
+
+## Обновления
+
+В разделе настроек «Обновление приложения» можно проверить новую версию
+вручную или включить автоматическую проверку при запуске. YMPlayer сначала
+обращается к GitHub, а при его недоступности использует резервный источник
+jsDelivr. Перед открытием системного установщика приложение обязательно
+проверяет размер и SHA-256 загруженного APK.
 
 ## Возможности
 

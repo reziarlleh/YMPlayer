@@ -13,6 +13,10 @@ public final class YmpSettings {
     private static final String KEY_SIDEBAR_AUTO_HIDE = "sidebar_auto_hide";
     private static final String KEY_CLIP_SYSTEM_BARS_AUTO_HIDE = "clip_system_bars_auto_hide";
     private static final String KEY_CONTROL_MODE = "control_mode";
+    private static final String KEY_AUTO_CHECK_UPDATES = "auto_check_updates";
+    private static final String KEY_LAST_UPDATE_CHECK = "last_update_check";
+
+    private static final long UPDATE_CHECK_INTERVAL_MS = 24L * 60L * 60L * 1000L;
 
     public static final String QUALITY_AUTO = "auto";
     public static final String QUALITY_ECONOMY = "economy";
@@ -116,6 +120,26 @@ public final class YmpSettings {
             return value;
         }
         return QUALITY_AUTO;
+    }
+
+    public static boolean isAutoCheckUpdatesEnabled(Context context) {
+        return prefs(context).getBoolean(KEY_AUTO_CHECK_UPDATES, true);
+    }
+
+    public static void setAutoCheckUpdatesEnabled(Context context, boolean enabled) {
+        prefs(context).edit().putBoolean(KEY_AUTO_CHECK_UPDATES, enabled).apply();
+    }
+
+    public static boolean shouldAutoCheckUpdates(Context context, long nowMs) {
+        if (!isAutoCheckUpdatesEnabled(context)) {
+            return false;
+        }
+        long lastCheck = prefs(context).getLong(KEY_LAST_UPDATE_CHECK, 0L);
+        return lastCheck <= 0L || nowMs < lastCheck || nowMs - lastCheck >= UPDATE_CHECK_INTERVAL_MS;
+    }
+
+    public static void markUpdateCheckSucceeded(Context context, long nowMs) {
+        prefs(context).edit().putLong(KEY_LAST_UPDATE_CHECK, Math.max(0L, nowMs)).apply();
     }
 
     private static SharedPreferences prefs(Context context) {
