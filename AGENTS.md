@@ -3,6 +3,14 @@
 - At the start of non-trivial work in this repository, query agentmemory for
   `YaPlay`, `YMPlayer`, `Yandex Music`, `My Wave`, `SideBar`, and
   `com.ts18.sidebar` before changing behavior.
+- Use `github.com/reziarlleh/YMPlayer` as the canonical Agent Memory project
+  identifier for project-scoped memories and actions.
+- Use the local RepoWise index before broad code exploration: start with
+  `repowise search`, `repowise context`, or the RepoWise MCP tools, then read
+  the identified source files before editing them.
+- Keep RepoWise synchronized with `repowise update` when the working tree has
+  relevant changes. The repository post-commit hook provides the normal
+  automatic update path; use `repowise doctor` when index health is unclear.
 - Treat `D:\_codex\SideBar` and agentmemory SideBar observations as the source
   of truth for TS18 sidebar integration details.
 - SideBar package: `com.ts18.sidebar`.

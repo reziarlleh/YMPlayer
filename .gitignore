@@ -15,6 +15,9 @@ local.properties
 # Codex/runtime attachments and transient files
 .codex-remote-attachments/
 
+# Local RepoWise index (rebuilt from the repository)
+.repowise/
+
 # Local APK build output stays ignored, but archived working builds under
 # releases/<version>/ are intentionally committed for this private repo.
 *.apk
