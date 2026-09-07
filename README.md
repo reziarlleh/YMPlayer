@@ -9,15 +9,15 @@ Android 10 и новее. Приложение рассчитано на сма�
 магнитолы, поддерживает системные медиакнопки и делает основной упор на
 "Мою волну", оффлайн-избранное и удобное управление в дороге.
 
-Текущая версия: **1.0.0-beta.10**. Основные функции завершены; статус beta оставлен
+Текущая версия: **1.0.0-beta.11**. Основные функции завершены; статус beta оставлен
 для длительного тестирования на разных устройствах и версиях сервисов Яндекса.
 
 ## Скачать
 
-- [YMPlayer 1.0.0-beta.10 в GitHub Releases](https://github.com/reziarlleh/YMPlayer/releases/tag/v1.0.0-beta.10)
-- [Скачать APK](https://github.com/reziarlleh/YMPlayer/releases/download/v1.0.0-beta.10/YMPlayer-v1.0.0-beta.10-release-b110.apk)
-- [Резервная загрузка через jsDelivr](https://cdn.jsdelivr.net/gh/reziarlleh/YMPlayer@v1.0.0-beta.10/releases/1.0.0-beta.10/YMPlayer-v1.0.0-beta.10-release-b110.apk)
-- [APK в архиве репозитория](releases/1.0.0-beta.10/YMPlayer-v1.0.0-beta.10-release-b110.apk)
+- [YMPlayer 1.0.0-beta.11 в GitHub Releases](https://github.com/reziarlleh/YMPlayer/releases/tag/v1.0.0-beta.11)
+- [Скачать APK](https://github.com/reziarlleh/YMPlayer/releases/download/v1.0.0-beta.11/YMPlayer-v1.0.0-beta.11-release-b111.apk)
+- [Резервная загрузка через jsDelivr](https://cdn.jsdelivr.net/gh/reziarlleh/YMPlayer@v1.0.0-beta.11/releases/1.0.0-beta.11/YMPlayer-v1.0.0-beta.11-release-b111.apk)
+- [APK в архиве репозитория](releases/1.0.0-beta.11/YMPlayer-v1.0.0-beta.11-release-b111.apk)
 
 APK поддерживает обновление ранее установленных версий YMPlayer без очистки
 настроек, авторизации и локального кэша.
@@ -70,7 +70,7 @@ jsDelivr. Перед открытием системного установщи�
 - `MediaSession` и `MediaBrowserService`: YMPlayer определяется Android как
   медиаплеер и может использоваться в CarWebGuru и других совместимых
   лаунчерах.
-- Встроенный SideBar для магнитол TS18 с вытягиванием от края экрана.
+- Встроенный SideBar с вытягиванием от края экрана и поддержкой команд K4811/NWD.
 - Крупные кнопки громкости, mute, Home, Back, сна и перезагрузки.
 - Настраиваемое автоскрытие SideBar.
 - Быстрый переход к выбранному приложению EQ/DSP.

@@ -25,6 +25,7 @@
         <package android:name="com.android.launcher" />
         <package android:name="com.android.launcher2" />
         <package android:name="com.nwd.toolallinone.app" />
+        <package android:name="com.nwd.setting.service" />
         <intent>
             <action android:name="android.media.action.DISPLAY_AUDIO_EFFECT_CONTROL_PANEL" />
         </intent>
@@ -65,6 +66,15 @@
             android:exported="false"
             android:label="@string/clip_wave_title"
             android:launchMode="singleTop" />
+
+        <activity
+            android:name=".HeadUnitRebootActivity"
+            android:configChanges="keyboardHidden|orientation|screenSize"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:launchMode="singleTask"
+            android:taskAffinity="${applicationId}.reboot"
+            android:theme="@style/RebootTheme" />
 
         <provider
             android:name=".update.UpdateFileProvider"
