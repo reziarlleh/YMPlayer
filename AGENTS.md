@@ -1,35 +1,103 @@
-# YMPlayer / YaPlay Agent Notes
+# YMPlayer: правила работы с проектом
 
-- At the start of non-trivial work in this repository, query agentmemory for
-  `YaPlay`, `YMPlayer`, `Yandex Music`, `My Wave`, `SideBar`, and
-  `com.ts18.sidebar` before changing behavior.
-- Use `github.com/reziarlleh/YMPlayer` as the canonical Agent Memory project
-  identifier for project-scoped memories and actions.
-- Use the local RepoWise index before broad code exploration: start with
-  `repowise search`, `repowise context`, or the RepoWise MCP tools, then read
-  the identified source files before editing them.
-- Keep RepoWise synchronized with `repowise update` when the working tree has
-  relevant changes. The repository post-commit hook provides the normal
-  automatic update path; use `repowise doctor` when index health is unclear.
-- Treat `D:\_codex\SideBar` and agentmemory SideBar observations as the source
-  of truth for TS18 sidebar integration details.
-- SideBar package: `com.ts18.sidebar`.
-- SideBar persistence model: `SYSTEM_ALERT_WINDOW` plus foreground
-  `SideBarOverlayService`, not AccessibilityService.
-- YMPlayer owns the additional SideBar keep-alive while its playback service is
-  alive. The periodic path should be quiet: explicit
-  `android.intent.action.USER_PRESENT` to `SideBarHealthReceiver` plus
-  `com.ts18.sidebar.action.CONFIG_CHANGED` without show/collapse extras. Use
-  `com.ts18.sidebar.action.RESTART_FROM_WIDGET` only for the manual restart
-  button, not for periodic pings.
-- TS18 volume/mute controls should use native NWD broadcasts when a TS18
-  environment is detected:
-  `com.nwd.action.ACTION_KEY_VALUE` with only `extra_key_value`, or
-  `com.nwd.can.action.ACTION_PLATFORM_SEND_CAN_VOLUME` when
-  `can_use_amp_volume_key == 1`.
-- Keep APK output names informative with version and build code.
-- Preserve Android 10+ compatibility: `minSdk 29` is a hard requirement.
-  Any API added after 29 must be protected with an SDK-version guard or have a
-  safe Android 10 fallback.
-- Keep permanent offline storage limited to global Yandex Music liked tracks.
-  Non-liked playback may use only the limited temporary playback cache.
+Этот файл предназначен для агентов разработки, не для пользователей приложения.
+Он фиксирует рабочие ограничения, а не заменяет документацию или историю версий.
+
+## Контекст и источники
+
+- Канонический репозиторий: `github.com/reziarlleh/YMPlayer`. YaPlay остаётся
+  историческим именем каталога; приложение называется YMPlayer.
+- Это самостоятельный аудио- и видеоплеер для Яндекс Музыки, не плагин Poweramp.
+  Развивается стабильная ветка 1.x. Концепция 2.0, профили, полноценная медиатека
+  и расширенная настройка кнопок SideBar пока только в плане, не в реализации.
+- Текущие versionName/versionCode читайте в [app/build.gradle](app/build.gradle),
+  состояние выпуска проверяйте в GitHub Releases и [update/manifest.json](update/manifest.json).
+  Не дублируйте здесь номер последней версии или количество тестов.
+- Возможности: [README.md](README.md). Будущие работы: [ROADMAP.md](ROADMAP.md).
+  Ограничения и проверенные сценарии: [PROJECT_AUDIT.md](PROJECT_AUDIT.md).
+  История: [CHANGELOG.md](CHANGELOG.md). `docs/history/` содержит архив, не текущий план.
+- Перед нетривиальной работой используйте доступную native memory Codex по
+  YMPlayer/YaPlay, My Wave, SideBar и K4811. Внешний agent-memory выведен из
+  использования: не запускать и не требовать его. Память обновлять только по
+  прямому запросу пользователя, штатным механизмом Codex.
+- Текущий код, свежая проверка и последние сообщения пользователя важнее старых
+  заметок. Локальные пути, инструменты и соседние проекты не считать обязательными
+  зависимостями для клонирования или сборки публичного репозитория.
+
+## Навигация и изменения
+
+- Для нетривиального исследования используйте RepoWise MCP или CLI
+  (`repowise search`, `repowise context`) перед широким чтением исходников.
+  Результаты индекса проверяйте по коду; сообщения о dead code являются гипотезами.
+- После значимых изменений обновляйте индекс через `repowise update` или
+  настроенный post-commit hook; при рассинхронизации используйте
+  `repowise doctor --repair`. Индекс не заменяет тесты, сборку и сетевые проверки.
+- На текущем Windows-окружении предпочитайте PowerShell 7 (`pwsh`). Сохраняйте
+  пользовательские изменения; не включайте посторонние файлы в коммиты.
+- Не публикуйте OAuth-токены, ключи подписи, личные логи, прошивки и извлечённые
+  сторонние APK/исходники. Правки документации сами по себе не требуют нового APK.
+- При изменении поведения актуализируйте соответствующие документы. Не записывайте
+  планы как реализованные функции и не переписывайте историю старых выпусков.
+
+## Рабочие инварианты
+
+- Android 10+ обязателен: `minSdk 29`. Более новые Android API должны иметь
+  SDK-проверку или совместимый путь. Не менять package/applicationId без миграции.
+- Беречь аудиоволну, feedback, подготовку следующего трека, восстановление трека
+  и позиции, MediaSession/MediaBrowser и обложки в CarWebGuru. Не менять их
+  алгоритмы в рамках визуальных правок без конкретной причины.
+- Смена источника останавливает воспроизведение; выбранный источник ждёт Play.
+- Постоянный кэш Яндекса предназначен только для глобального «Мне нравится».
+  Остальная онлайн-музыка может занимать лишь ограниченный временный кэш.
+  Одна синхронизация проверяет и восстанавливает аудио и настоящую обложку,
+  не перекачивая исправные части. Снятие лайка удаляет соответствующий кэш.
+- Логотип является только заглушкой отображения, не обложкой для записи в трек
+  или постоянный кэш обложек. Локальные файлы и «Локальное избранное» независимы
+  от аккаунта Яндекса; не удалять исходные файлы при удалении плейлиста.
+- Недоступные локальные файлы пропускаются. Если доступных нет, плеер
+  останавливается, а не перебирает очередь бесконечно.
+- Сенсор: действие с первого тапа. Пульт: видимый фокус и отклик без увеличения
+  элемента. Проверять обе ориентации, короткие горизонтальные экраны и системные
+  отступы. Не разрывать упорядоченные группы управления переносами.
+- Общий статус-бар аудиоэкрана, библиотеки, поиска и настроек раскрывается
+  в прокручиваемый журнал. Волна клипов остаётся полноэкранной, без постоянного
+  статус-бара; её управление скрывается. Не скрывать меню лаунчера Android TV.
+
+## Встроенный SideBar и K4811
+
+- Основной путь: `player/EmbeddedSideBarService` внутри YMPlayer, разрешение
+  `SYSTEM_ALERT_WINDOW` и foreground service. `YmpPlaybackService` поддерживает
+  его при включённой настройке. Отдельный `com.ts18.sidebar` не требуется.
+- Старые `SideBarHelper`, vendor action/package names и имя `Ts18AudioControls`
+  не означают, что магнитола пользователя TS10/TS18. Его устройство **K4811**.
+  Не переименовывать протокольные строки или ключи настроек механически.
+- Сохранять работающие громкость/mute, Home/Back, вытягивание от края и настройку
+  автоскрытия. Сон и перезагрузка находятся в конце, сворачивание всегда последним.
+- Не возвращать AccessibilityService, зависимость от внешнего SideBar или
+  эксперименты полного выключения в рамках обычных доработок.
+- Перезагрузка требует подтверждения. Контракт K4811/NWD описан в
+  [docs/K4811_REBOOT.md](docs/K4811_REBOOT.md), реализация в `NwdRebootProtocol`:
+  transaction `0x1c`, только byte `2`. Другие значения `requestOSFactoryReset`
+  могут сбрасывать данные; их нельзя подставлять или пробовать.
+- Успешная отправка broadcast/Binder не доказывает физическое действие.
+  Подтверждение пользователя на его K4811 не распространять на другие прошивки.
+
+## Проверки и выпуск
+
+- Используйте JDK 17, Android SDK и Gradle Wrapper проекта. Для изменений кода:
+  `./gradlew.bat :app:testDebugUnitTest :app:assembleRelease :app:lintRelease`.
+  Добавляйте тесты соразмерно риску; сохраняйте проверки совместимости API 29/35.
+- UI проверяйте геометрией и снимками, при необходимости живым эмулятором.
+  Обычный Android-эмулятор не заменяет Android TV с пультом или магнитолу K4811.
+  Установку и проверки на физическом устройстве согласовывайте отдельно.
+- Разделяйте доказательства: тесты, сборка, подпись APK, HTTP-загрузка и
+  подтверждение реального воспроизведения/сна/CWG на устройстве.
+- APK именуйте с версией, типом и build code, архивируйте в `releases/<version>/`
+  вместе с SHA-256 и описанием. Release APK должен быть неотладочным. Сохраняйте
+  прежнюю подпись для обновления поверх установленных версий; текущая release
+  configuration использует исторический debug signing key. Не менять его молча.
+- Для согласованного стабильного выпуска публикуйте обычный GitHub Release
+  как Latest, не prerelease. Старые beta-теги и APK оставляйте историческими.
+- До публикации нового update-манифеста проверяйте анонимную загрузку APK
+  по основному GitHub-адресу и резервному jsDelivr, размер и SHA-256. После push
+  проверяйте актуальность обоих адресов манифеста, учитывая CDN-кэш.
