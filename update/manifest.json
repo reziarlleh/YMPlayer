@@ -1,16 +1,16 @@
 {
   "schemaVersion": 1,
   "packageName": "dev.petrov.yaplay",
-  "versionCode": 111,
-  "versionName": "1.0.0-beta.11",
+  "versionCode": 112,
+  "versionName": "1.0.0-beta.12",
   "minSdk": 29,
-  "publishedAt": "2026-09-08T02:50:00+05:00",
-  "releasePageUrl": "https://github.com/reziarlleh/YMPlayer/releases/tag/v1.0.0-beta.11",
-  "releaseNotes": "Переработана перезагрузка K4811 из SideBar: окно подтверждения, прямое подключение к штатной службе, явные ошибки и запасной системный диалог. Плеер, кэш и сон не менялись. Новый путь требует проверки на магнитоле.",
+  "publishedAt": "2026-09-08T09:25:37+05:00",
+  "releasePageUrl": "https://github.com/reziarlleh/YMPlayer/releases/tag/v1.0.0-beta.12",
+  "releaseNotes": "Одна кнопка «Синхронизировать избранное» проверяет музыку и обложки, докачивает отсутствующие и восстанавливает повреждённые части. Исправные файлы не скачиваются заново. Старый кэш очищать не нужно. SideBar не менялся.",
   "apk": {
-    "primaryUrl": "https://github.com/reziarlleh/YMPlayer/releases/download/v1.0.0-beta.11/YMPlayer-v1.0.0-beta.11-release-b111.apk",
-    "alternativeUrl": "https://cdn.jsdelivr.net/gh/reziarlleh/YMPlayer@v1.0.0-beta.11/releases/1.0.0-beta.11/YMPlayer-v1.0.0-beta.11-release-b111.apk",
-    "sizeBytes": 14325266,
-    "sha256": "aa9e92c58627f50282918043bd7098c2bf9257a6af09bb5e71bab7313fe6c31c"
+    "primaryUrl": "https://github.com/reziarlleh/YMPlayer/releases/download/v1.0.0-beta.12/YMPlayer-v1.0.0-beta.12-release-b112.apk",
+    "alternativeUrl": "https://cdn.jsdelivr.net/gh/reziarlleh/YMPlayer@v1.0.0-beta.12/releases/1.0.0-beta.12/YMPlayer-v1.0.0-beta.12-release-b112.apk",
+    "sizeBytes": 14327662,
+    "sha256": "b42ccdf28066ffef65d30dd6563f51111046a6fca69e3107579e49227e7e33a8"
   }
 }
