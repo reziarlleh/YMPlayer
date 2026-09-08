@@ -2217,18 +2217,18 @@ public class MainActivity extends Activity {
         modeParams.setMargins(0, dp(10), 0, dp(2));
         info.addView(modeView, modeParams);
 
-        LinearLayout titleRow = row();
-        titleRow.setGravity(Gravity.CENTER_VERTICAL);
-        info.addView(titleRow, matchWrap());
+        TrackDetailsLayout details = new TrackDetailsLayout(this);
+        details.setTag("player-details");
+        info.addView(details, matchWrap());
         likeButton = smallIconButton(R.drawable.ic_player_like, 0xff1f3b32, 0xffbcffe8, dp(44), getString(R.string.like_track));
         likeButton.setOnClickListener(v -> sendPlayerAction(YmpPlaybackService.ACTION_LIKE));
-        titleRow.addView(likeButton, new LinearLayout.LayoutParams(dp(48), dp(48)));
+        details.actions.addView(likeButton, new LinearLayout.LayoutParams(dp(48), dp(48)));
         dislikeButton = smallIconButton(R.drawable.ic_player_dislike, 0xff3a1d27, 0xffffbec9, dp(44), getString(R.string.dislike_track));
         dislikeButton.setOnClickListener(v -> sendPlayerAction(YmpPlaybackService.ACTION_DISLIKE));
-        titleRow.addView(dislikeButton, new LinearLayout.LayoutParams(dp(48), dp(48)));
+        details.actions.addView(dislikeButton, new LinearLayout.LayoutParams(dp(48), dp(48)));
         addToPlaylistButton = smallIconButton(R.drawable.ic_player_add_playlist, 0xff24334a, 0xffd6e5ff, dp(44), getString(R.string.add_current_to_yandex_playlist));
         addToPlaylistButton.setOnClickListener(v -> showAddCurrentToYandexPlaylistDialog());
-        titleRow.addView(addToPlaylistButton, new LinearLayout.LayoutParams(dp(48), dp(48)));
+        details.actions.addView(addToPlaylistButton, new LinearLayout.LayoutParams(dp(48), dp(48)));
 
         nowTitleView = new TextView(this);
         nowTitleView.setText(R.string.now_playing_empty);
@@ -2237,7 +2237,7 @@ public class MainActivity extends Activity {
         nowTitleView.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         nowTitleView.setMaxLines(2);
         nowTitleView.setEllipsize(TextUtils.TruncateAt.END);
-        titleRow.addView(nowTitleView, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        details.labels.addView(nowTitleView, matchWrap());
 
         nowArtistView = new TextView(this);
         nowArtistView.setText("");
@@ -2245,15 +2245,15 @@ public class MainActivity extends Activity {
         nowArtistView.setTextSize(18);
         nowArtistView.setSingleLine(true);
         nowArtistView.setEllipsize(TextUtils.TruncateAt.END);
-        info.addView(nowArtistView, matchWrap());
+        details.labels.addView(nowArtistView, matchWrap());
 
         nowAlbumView = new TextView(this);
         nowAlbumView.setText("");
-        nowAlbumView.setTextColor(0xff718695);
+        nowAlbumView.setTextColor(COLOR_MUTED);
         nowAlbumView.setTextSize(13);
         nowAlbumView.setSingleLine(true);
         nowAlbumView.setEllipsize(TextUtils.TruncateAt.END);
-        info.addView(nowAlbumView, matchWrap());
+        details.labels.addView(nowAlbumView, matchWrap());
 
         queueView = new TextView(this);
         queueView.setTag("player-queue");

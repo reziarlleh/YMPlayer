@@ -1,4 +1,7 @@
 <resources>
+    <string name="status_expand">Развернуть статус и журнал</string>
+    <string name="status_collapse">Свернуть статус и журнал</string>
+    <string name="status_log_unavailable">Не удалось прочитать журнал диагностики.</string>
     <string name="app_name">YMPlayer</string>
     <string name="main_title">YMPlayer</string>
     <string name="main_subtitle">Плеер Яндекс Музыки</string>

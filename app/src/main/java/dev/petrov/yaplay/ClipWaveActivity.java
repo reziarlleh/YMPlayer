@@ -123,7 +123,7 @@ public final class ClipWaveActivity extends Activity {
     private TextView loadingTextView;
     private TextView titleView;
     private TextView artistView;
-    private AppStatusBar statusView;
+    private TextView statusView;
     private TextView transientTitleView;
     private TextView transientArtistView;
     private TextView clipTimeView;
@@ -638,7 +638,12 @@ public final class ClipWaveActivity extends Activity {
                 dp(22)
         ));
 
-        statusView = new AppStatusBar(this);
+        statusView = new TextView(this);
+        statusView.setTextSize(12);
+        statusView.setTextColor(COLOR_MUTED);
+        statusView.setMaxLines(2);
+        statusView.setEllipsize(TextUtils.TruncateAt.END);
+        info.addView(statusView, matchWrap());
 
         PlayerButtonLayout controls = new PlayerButtonLayout(this, true, 1);
         LinearLayout.LayoutParams controlsParams = new LinearLayout.LayoutParams(
@@ -677,12 +682,7 @@ public final class ClipWaveActivity extends Activity {
         controls.addView(likeButton);
 
         root.setOnClickListener(v -> toggleOverlay());
-        LinearLayout shell = new LinearLayout(this);
-        shell.setOrientation(LinearLayout.VERTICAL);
-        shell.setBackgroundColor(COLOR_BG);
-        shell.addView(root, new LinearLayout.LayoutParams(-1, 0, 1f));
-        shell.addView(statusView, new LinearLayout.LayoutParams(-1, -2));
-        return shell;
+        return root;
     }
 
     private void startClipWave() {

@@ -48,6 +48,8 @@ final class PlayerPageLayout extends ViewGroup {
         info.findViewWithTag("player-queue").setVisibility(compact ? GONE : VISIBLE);
         ((PlayerButtonLayout) info.findViewWithTag("player-transport")).setCompact(compact);
         int bodyHeight = Math.max(1, height - bodyTop - gap);
+        ((TrackDetailsLayout) info.findViewWithTag("player-details"))
+                .setTypography(wide && bodyHeight >= dp(540) ? 2 : wide && bodyHeight >= dp(300) ? 1 : 0);
         int infoWidth;
         if (wide) {
             coverSize = Math.max(dp(112), Math.min(bodyHeight,

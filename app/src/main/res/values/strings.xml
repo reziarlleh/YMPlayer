@@ -1,4 +1,7 @@
 <resources>
+    <string name="status_expand">Expand status and log</string>
+    <string name="status_collapse">Collapse status and log</string>
+    <string name="status_log_unavailable">Unable to read diagnostics.</string>
     <string name="app_name">YMPlayer</string>
     <string name="main_title">YMPlayer</string>
     <string name="main_subtitle">Yandex Music player</string>

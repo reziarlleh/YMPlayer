@@ -40,7 +40,7 @@ import static org.robolectric.Shadows.shadowOf;
 public class AdaptiveLayoutTest {
     @Test public void playerFitsPhoneHeadUnitAndTv() throws Exception {
         int[][] sizes = {{320,568,160}, {360,800,160}, {1080,2400,480}, {800,360,160},
-                {1024,600,160}, {1280,720,240}, {1920,1080,320}, {800,1280,160}};
+                {1024,600,160}, {1280,720,240}, {1920,1080,320}, {1920,1080,160}, {800,1280,160}};
         for (int[] size : sizes) {
             configure(size[0], size[1], size[2]);
             MainActivity activity = activity();
@@ -54,6 +54,17 @@ public class AdaptiveLayoutTest {
             AppStatusBar status = field(activity, "statusView");
             assertEquals(root.getHeight(), status.getBottom());
             assertEquals(2, status.getChildCount());
+            TrackDetailsLayout details = root.findViewWithTag("player-details");
+            for (int i = 0; i < details.labels.getChildCount(); i++) {
+                assertEquals(0, details.labels.getChildAt(i).getLeft());
+            }
+            assertFalse(Rect.intersects(new Rect(details.labels.getLeft(), details.labels.getTop(),
+                            details.labels.getRight(), details.labels.getBottom()),
+                    new Rect(details.actions.getLeft(), details.actions.getTop(),
+                            details.actions.getRight(), details.actions.getBottom())));
+            if (size[0] == 1920 && size[2] == 160) {
+                assertEquals(40f, ((TextView) details.labels.getChildAt(0)).getTextSize(), .01f);
+            }
             checkButtons(root);
             View previous = findDescription(root, activity.getString(R.string.previous_track));
             View next = findDescription(root, activity.getString(R.string.next_track));
@@ -88,6 +99,32 @@ public class AdaptiveLayoutTest {
             invoke(activity, "updateStatus", new Class<?>[]{String.class}, "Operation complete\n\nCache ready");
             assertEquals("Operation complete", ((TextView) bar.getChildAt(0)).getText().toString());
             dialog.dismiss();
+        }
+    }
+
+    @Test public void longMetadataAndExpandedStatusKeepSeparateBlocks() throws Exception {
+        for (int[] size : new int[][]{{360,800}, {800,360}, {1024,600}, {1920,1080}}) {
+            configure(size[0], size[1], 160);
+            MainActivity activity = activity();
+            View root = (View) invoke(activity, "buildContent");
+            sampleTrack(activity);
+            ((TextView) field(activity, "nowTitleView")).setText(
+                    "Очень длинное название композиции с несколькими словами и дополнительным уточнением");
+            ((TextView) field(activity, "nowArtistView")).setText(
+                    "План Ломоносова, приглашённый исполнитель и большой оркестр");
+            AppStatusBar status = field(activity, "statusView");
+            status.setText("Сообщение\n".repeat(60));
+            status.performClick();
+            measure(root, size[0], size[1]);
+            TrackDetailsLayout details = root.findViewWithTag("player-details");
+            TextView title = field(activity, "nowTitleView");
+            assertTrue(title.getLineCount() <= 2);
+            assertTrue(details.actions.getLeft() >= details.labels.getRight()
+                    || details.actions.getTop() >= details.labels.getBottom());
+            assertTrue(status.getHeight() <= Math.round(size[1] * .45f));
+            assertEquals(size[1], status.getBottom());
+            checkButtons(root);
+            snapshot(root, "expanded-long-title-" + size[0] + "x" + size[1]);
         }
     }
 
@@ -127,7 +164,7 @@ public class AdaptiveLayoutTest {
         snapshot(root, "phone-large-font");
     }
 
-    @Test public void clipControlsAndStatusStayInsideViewport() throws Exception {
+    @Test public void clipsFillViewportWithoutPersistentFooter() throws Exception {
         for (int[] size : new int[][]{{360,800}, {800,360}, {1024,600}, {1920,1080}}) {
             configure(size[0], size[1], 160);
             ClipWaveActivity activity = Robolectric.buildActivity(ClipWaveActivity.class).get();
@@ -147,7 +184,12 @@ public class AdaptiveLayoutTest {
             measure(root, size[0], size[1]);
             snapshot(root, "clips-" + size[0] + "x" + size[1]);
             checkButtons(root);
-            assertEquals(size[1], findStatus(root).getBottom());
+            assertNull(findStatus(root));
+            Field player = ClipWaveActivity.class.getDeclaredField("playerView");
+            player.setAccessible(true);
+            View video = (View) player.get(activity);
+            assertEquals(size[0], video.getWidth());
+            assertEquals(size[1], video.getHeight());
         }
     }
 
@@ -166,7 +208,7 @@ public class AdaptiveLayoutTest {
     }
 
     private static void sampleTrack(MainActivity activity) throws Exception {
-        ((TextView) field(activity, "nowTitleView")).setText("Ветер перемен");
+        ((TextView) field(activity, "nowTitleView")).setText("Квадратный ноль");
         ((TextView) field(activity, "nowArtistView")).setText("Исполнитель и приглашённый артист");
         ((TextView) field(activity, "nowAlbumView")).setText("Название альбома · 2026");
         ((TextView) field(activity, "queueView")).setText("Трек 12 · Следующий трек готов");
