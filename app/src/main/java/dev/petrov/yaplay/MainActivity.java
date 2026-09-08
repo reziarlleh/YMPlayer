@@ -51,6 +51,7 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import java.io.File;
+import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -97,7 +98,9 @@ public class MainActivity extends Activity {
     private static final int COVER_RETRY_MAX = 4;
     private static final long COVER_RETRY_DELAY_MS = 12_000L;
 
-    private TextView statusView;
+    private AppStatusBar statusView;
+    private final List<WeakReference<AppStatusBar>> statusBars = new ArrayList<>();
+    private String latestStatus = "";
     private ImageView coverView;
     private TextView nowTitleView;
     private TextView nowArtistView;
@@ -108,7 +111,6 @@ public class MainActivity extends Activity {
     private ScrollView libraryPageView;
     private LinearLayout libraryPlaylistsView;
     private LinearLayout localPlaylistsView;
-    private TextView libraryStatusView;
     private Button libraryPlayerButton;
     private Button librarySearchButton;
     private Button waveSourceButton;
@@ -124,7 +126,6 @@ public class MainActivity extends Activity {
     private ImageButton sidebarToggleButton;
     private ImageButton libraryNavigationButton;
     private TextView loginCodeView;
-    private TextView settingsFeedbackView;
     private Button deviceLoginButton;
     private Button refreshDeviceCodeButton;
     private EditText tokenEdit;
@@ -182,6 +183,7 @@ public class MainActivity extends Activity {
         super.onCreate(savedInstanceState);
         View content = buildContent();
         setContentView(content);
+        SafeWindow.install(getWindow(), content);
         installInteractiveFeedbackTree(content);
         if (DeviceUi.usesRemoteControl(this) && playPauseButton != null) {
             playPauseButton.post(playPauseButton::requestFocus);
@@ -272,47 +274,38 @@ public class MainActivity extends Activity {
         FrameLayout page = new FrameLayout(this);
         page.setBackgroundColor(COLOR_BG);
 
-        playerPageView = new ScrollView(this);
-        playerPageView.setFillViewport(true);
-        playerPageView.setOverScrollMode(View.OVER_SCROLL_NEVER);
+        PlayerPageLayout playerLayout = new PlayerPageLayout(this);
+        playerPageView = PlayerPageLayout.scroll(this, playerLayout);
         attachSwipeNavigation(playerPageView);
         page.addView(playerPageView, matchFrame());
 
-        LinearLayout root = new LinearLayout(this);
-        root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(dp(wide ? 22 : 16), dp(wide ? 14 : 16), dp(wide ? 22 : 16), dp(16));
-        playerPageView.addView(root, matchScroll());
-
-        addTopBar(root);
-
-        LinearLayout playerSurface = new LinearLayout(this);
-        playerSurface.setOrientation(wide ? LinearLayout.HORIZONTAL : LinearLayout.VERTICAL);
-        playerSurface.setGravity(Gravity.CENTER_VERTICAL);
-        playerSurface.setPadding(dp(wide ? 18 : 14), dp(wide ? 14 : 16), dp(wide ? 18 : 14), dp(wide ? 14 : 18));
-        playerSurface.setBackground(panelBg(COLOR_SURFACE, dp(18), COLOR_STROKE));
-        LinearLayout.LayoutParams playerParams = matchWrap();
-        playerParams.setMargins(0, dp(8), 0, dp(12));
-        root.addView(playerSurface, playerParams);
-
-        addCoverPanel(playerSurface, wide);
-        addPlayerInfoPanel(playerSurface, wide);
-
-        statusView = new TextView(this);
-        statusView.setTextColor(COLOR_TEXT);
-        statusView.setTextSize(wide ? 12 : 13);
-        statusView.setMaxLines(wide ? 3 : 5);
-        statusView.setEllipsize(TextUtils.TruncateAt.END);
-        statusView.setTextIsSelectable(true);
-        statusView.setPadding(dp(14), dp(10), dp(14), dp(10));
-        statusView.setBackground(panelBg(0xff0d141b, dp(12), 0xff1d2b36));
-        root.addView(statusView, matchWrap());
+        LinearLayout header = new LinearLayout(this);
+        header.setOrientation(LinearLayout.VERTICAL);
+        addTopBar(header);
+        playerLayout.addView(header);
+        addCoverPanel(playerLayout, wide);
+        addPlayerInfoPanel(playerLayout, wide);
 
         libraryPageView = buildLibraryPage(wide);
         libraryPageView.setVisibility(View.GONE);
         attachSwipeNavigation(libraryPageView);
         page.addView(libraryPageView, matchFrame());
 
-        return page;
+        LinearLayout shell = screenShell(page);
+        statusView = (AppStatusBar) shell.getChildAt(1);
+        return shell;
+    }
+
+    private LinearLayout screenShell(View content) {
+        LinearLayout shell = new LinearLayout(this);
+        shell.setOrientation(LinearLayout.VERTICAL);
+        shell.setBackgroundColor(COLOR_BG);
+        shell.addView(content, new LinearLayout.LayoutParams(-1, 0, 1f));
+        AppStatusBar bar = new AppStatusBar(this);
+        bar.setText(latestStatus);
+        statusBars.add(new WeakReference<>(bar));
+        shell.addView(bar, new LinearLayout.LayoutParams(-1, -2));
+        return shell;
     }
 
     private ScrollView buildLibraryPage(boolean wide) {
@@ -339,14 +332,6 @@ public class MainActivity extends Activity {
         libraryPlayerButton = smallButton(getString(R.string.player_page), COLOR_SURFACE_2, COLOR_TEXT);
         libraryPlayerButton.setOnClickListener(v -> showPlayerPage());
         top.addView(libraryPlayerButton, compactButtonParams(dp(118)));
-
-        libraryStatusView = new TextView(this);
-        libraryStatusView.setText(R.string.library_status_ready);
-        libraryStatusView.setTextColor(COLOR_TEXT);
-        libraryStatusView.setTextSize(13);
-        libraryStatusView.setPadding(dp(14), dp(10), dp(14), dp(10));
-        libraryStatusView.setBackground(panelBg(0xff0d141b, dp(12), 0xff1d2b36));
-        root.addView(libraryStatusView, matchWrap());
 
         librarySearchButton = controlButton(getString(R.string.search_music), COLOR_ACCENT, COLOR_BG, 52);
         librarySearchButton.setOnClickListener(v -> showSearchEntry());
@@ -693,9 +678,6 @@ public class MainActivity extends Activity {
     }
 
     private void updateLibraryStatus(String text) {
-        if (libraryStatusView != null) {
-            libraryStatusView.setText(text == null ? "" : text);
-        }
         updateStatus(text == null ? "" : text);
     }
 
@@ -1972,6 +1954,24 @@ public class MainActivity extends Activity {
     }
 
     private void prepareDialogWindow(Dialog dialog, int maxWidthDp) {
+        ViewGroup windowContent = dialog.findViewById(android.R.id.content);
+        View content = windowContent.getChildAt(0);
+        windowContent.removeView(content);
+        FrameLayout host = new FrameLayout(this);
+        host.setPadding(dp(12), dp(12), dp(12), dp(12));
+        FrameLayout.LayoutParams contentParams = new FrameLayout.LayoutParams(
+                Math.min(dp(maxWidthDp), Math.max(dp(240), getResources().getDisplayMetrics().widthPixels - dp(24))),
+                ViewGroup.LayoutParams.MATCH_PARENT, Gravity.CENTER);
+        host.addView(content, contentParams);
+        host.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> {
+            int width = Math.min(dp(maxWidthDp), Math.max(1, r - l - host.getPaddingLeft() - host.getPaddingRight()));
+            if (content.getLayoutParams().width != width) {
+                content.getLayoutParams().width = width;
+                content.requestLayout();
+            }
+        });
+        LinearLayout shell = screenShell(host);
+        dialog.setContentView(shell);
         Window window = dialog.getWindow();
         if (window != null) {
             window.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
@@ -1980,11 +1980,9 @@ public class MainActivity extends Activity {
             Window shown = dialog.getWindow();
             if (shown != null) {
                 installInteractiveFeedbackTree(shown.getDecorView());
-                shown.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
-                shown.setLayout(
-                        isWideLayout() ? Math.min(dp(maxWidthDp), getResources().getDisplayMetrics().widthPixels - dp(48)) : WindowManager.LayoutParams.MATCH_PARENT,
-                        WindowManager.LayoutParams.WRAP_CONTENT
-                );
+                shown.setBackgroundDrawable(new ColorDrawable(COLOR_BG));
+                shown.setLayout(-1, -1);
+                SafeWindow.install(shown, shell);
             }
         });
     }
@@ -1998,9 +1996,9 @@ public class MainActivity extends Activity {
 
     private void addTopBar(LinearLayout root) {
         boolean wide = isWideLayout();
-        int logoSize = dp(wide ? 52 : 46);
-        int actionSize = dp(wide ? 52 : 48);
-        int actionContentSize = dp(wide ? 46 : 42);
+        int logoSize = dp(44);
+        int actionSize = dp(48);
+        int actionContentSize = dp(48);
         LinearLayout top = row();
         top.setGravity(Gravity.CENTER_VERTICAL);
         root.addView(top, matchWrap());
@@ -2014,7 +2012,7 @@ public class MainActivity extends Activity {
         logo.setOnClickListener(v -> showAboutDialog());
         installInteractiveFeedback(logo, dp(12));
         LinearLayout.LayoutParams logoParams = new LinearLayout.LayoutParams(logoSize, logoSize);
-        logoParams.setMargins(0, 0, dp(wide ? 12 : 8), 0);
+        logoParams.setMargins(0, 0, dp(8), 0);
         top.addView(logo, logoParams);
 
         LinearLayout titleBox = new LinearLayout(this);
@@ -2024,7 +2022,7 @@ public class MainActivity extends Activity {
         TextView title = new TextView(this);
         title.setText(R.string.main_title);
         title.setTextColor(COLOR_TEXT);
-        title.setTextSize(wide ? 28 : 26);
+        title.setTextSize(20);
         title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         title.setSingleLine(true);
         title.setEllipsize(TextUtils.TruncateAt.END);
@@ -2036,11 +2034,11 @@ public class MainActivity extends Activity {
         subtitle.setTextSize(wide ? 13 : 12);
         subtitle.setSingleLine(true);
         subtitle.setEllipsize(TextUtils.TruncateAt.END);
-        titleBox.addView(subtitle, matchWrap());
+        if (wide) titleBox.addView(subtitle, matchWrap());
 
         sidebarToggleButton = smallIconButton(R.drawable.ic_player_sidebar, COLOR_SURFACE_2, COLOR_TEXT, actionContentSize, getString(R.string.sidebar_quick_toggle));
         sidebarToggleButton.setOnClickListener(v -> toggleEmbeddedSideBar());
-        top.addView(sidebarToggleButton, compactButtonParams(actionSize));
+        top.addView(sidebarToggleButton, new LinearLayout.LayoutParams(actionSize, actionSize));
 
         libraryNavigationButton = smallIconButton(
                 android.R.drawable.ic_menu_search,
@@ -2050,7 +2048,7 @@ public class MainActivity extends Activity {
                 getString(R.string.open_search_and_playlists)
         );
         libraryNavigationButton.setOnClickListener(v -> showLibraryPage());
-        top.addView(libraryNavigationButton, compactButtonParams(actionSize));
+        top.addView(libraryNavigationButton, new LinearLayout.LayoutParams(actionSize, actionSize));
 
         ImageButton settings = smallIconButton(
                 android.R.drawable.ic_menu_preferences,
@@ -2060,7 +2058,7 @@ public class MainActivity extends Activity {
                 getString(R.string.settings_menu)
         );
         settings.setOnClickListener(v -> showSettingsDialog());
-        top.addView(settings, compactButtonParams(actionSize));
+        top.addView(settings, new LinearLayout.LayoutParams(actionSize, actionSize));
     }
 
     private void showAboutDialog() {
@@ -2169,16 +2167,11 @@ public class MainActivity extends Activity {
         }
     }
 
-    private void addCoverPanel(LinearLayout playerSurface, boolean wide) {
+    private void addCoverPanel(ViewGroup playerSurface, boolean wide) {
         FrameLayout coverPanel = new FrameLayout(this);
-        coverPanel.setPadding(dp(10), dp(10), dp(10), dp(10));
-        coverPanel.setBackground(panelBg(0xff0b1118, dp(16), 0xff25384a));
-
-        int artSize = coverSize(wide);
-        LinearLayout.LayoutParams panelParams = new LinearLayout.LayoutParams(artSize, artSize);
-        panelParams.gravity = Gravity.CENTER;
-        panelParams.setMargins(0, 0, wide ? dp(22) : 0, wide ? 0 : dp(18));
-        playerSurface.addView(coverPanel, panelParams);
+        coverPanel.setBackground(panelBg(0xff0b1118, dp(8), 0xff25384a));
+        coverPanel.setClipToOutline(true);
+        playerSurface.addView(coverPanel);
 
         coverView = new ImageView(this);
         coverView.setImageResource(R.drawable.ymplayer_default_artwork);
@@ -2187,41 +2180,33 @@ public class MainActivity extends Activity {
         coverPanel.addView(coverView, matchFrame());
     }
 
-    private void addPlayerInfoPanel(LinearLayout playerSurface, boolean wide) {
+    private void addPlayerInfoPanel(ViewGroup playerSurface, boolean wide) {
         LinearLayout info = new LinearLayout(this);
         info.setOrientation(LinearLayout.VERTICAL);
         info.setGravity(Gravity.CENTER_VERTICAL);
-        playerSurface.addView(info, wide
-                ? new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-                : matchWrap());
 
-        LinearLayout sources = row();
-        sources.setGravity(Gravity.CENTER_VERTICAL);
-        info.addView(sources, matchWrap());
+        PlayerButtonLayout sources = new PlayerButtonLayout(this, false);
+        playerSurface.addView(sources);
+        playerSurface.addView(info);
         waveSourceButton = pillButton(getString(R.string.play_my_wave_compact), COLOR_ACCENT, 0xff151100);
         waveSourceButton.setOnClickListener(v -> selectPlaybackSource(true));
-        sources.addView(waveSourceButton, rowButtonParams(1.15f));
+        sources.addView(waveSourceButton);
         offlineSourceButton = pillButton(getString(R.string.play_liked_cache_compact), COLOR_SURFACE_2, COLOR_TEXT);
         offlineSourceButton.setOnClickListener(v -> selectPlaybackSource(false));
-        sources.addView(offlineSourceButton, rowButtonParams(1.25f));
+        sources.addView(offlineSourceButton);
         playlistSourceButton = pillButton(getString(R.string.playlist_source_empty), COLOR_SURFACE_2, COLOR_TEXT);
         playlistSourceButton.setOnClickListener(v -> showPlaylistSelector());
-        sources.addView(playlistSourceButton, rowButtonParams(1.2f));
+        sources.addView(playlistSourceButton);
 
         clipWaveButton = pillButton(getString(R.string.clip_wave_title), 0xffd94768, COLOR_TEXT);
         clipWaveButton.setCompoundDrawablesWithIntrinsicBounds(R.drawable.ic_player_clips, 0, 0, 0);
         clipWaveButton.setCompoundDrawablePadding(dp(8));
         clipWaveButton.setContentDescription(getString(R.string.clip_wave_open));
         clipWaveButton.setOnClickListener(v -> openClipWave());
-        if (wide) {
-            sources.addView(clipWaveButton, rowButtonParams(1.15f));
-        } else {
-            LinearLayout.LayoutParams clipParams = matchWrap();
-            clipParams.setMargins(0, dp(8), 0, 0);
-            info.addView(clipWaveButton, clipParams);
-        }
+        sources.addView(clipWaveButton);
 
         modeView = new TextView(this);
+        modeView.setTag("player-mode");
         modeView.setText(R.string.source_my_wave);
         modeView.setTextColor(COLOR_ACCENT);
         modeView.setTextSize(12);
@@ -2237,27 +2222,27 @@ public class MainActivity extends Activity {
         info.addView(titleRow, matchWrap());
         likeButton = smallIconButton(R.drawable.ic_player_like, 0xff1f3b32, 0xffbcffe8, dp(44), getString(R.string.like_track));
         likeButton.setOnClickListener(v -> sendPlayerAction(YmpPlaybackService.ACTION_LIKE));
-        titleRow.addView(likeButton, compactButtonParams(dp(48)));
+        titleRow.addView(likeButton, new LinearLayout.LayoutParams(dp(48), dp(48)));
         dislikeButton = smallIconButton(R.drawable.ic_player_dislike, 0xff3a1d27, 0xffffbec9, dp(44), getString(R.string.dislike_track));
         dislikeButton.setOnClickListener(v -> sendPlayerAction(YmpPlaybackService.ACTION_DISLIKE));
-        titleRow.addView(dislikeButton, compactButtonParams(dp(48)));
+        titleRow.addView(dislikeButton, new LinearLayout.LayoutParams(dp(48), dp(48)));
         addToPlaylistButton = smallIconButton(R.drawable.ic_player_add_playlist, 0xff24334a, 0xffd6e5ff, dp(44), getString(R.string.add_current_to_yandex_playlist));
         addToPlaylistButton.setOnClickListener(v -> showAddCurrentToYandexPlaylistDialog());
-        titleRow.addView(addToPlaylistButton, compactButtonParams(dp(48)));
+        titleRow.addView(addToPlaylistButton, new LinearLayout.LayoutParams(dp(48), dp(48)));
 
         nowTitleView = new TextView(this);
         nowTitleView.setText(R.string.now_playing_empty);
         nowTitleView.setTextColor(COLOR_TEXT);
-        nowTitleView.setTextSize(wide ? 30 : 25);
+        nowTitleView.setTextSize(24);
         nowTitleView.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-        nowTitleView.setMaxLines(wide ? 2 : 3);
+        nowTitleView.setMaxLines(2);
         nowTitleView.setEllipsize(TextUtils.TruncateAt.END);
         titleRow.addView(nowTitleView, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
 
         nowArtistView = new TextView(this);
         nowArtistView.setText("");
         nowArtistView.setTextColor(COLOR_MUTED);
-        nowArtistView.setTextSize(wide ? 18 : 17);
+        nowArtistView.setTextSize(18);
         nowArtistView.setSingleLine(true);
         nowArtistView.setEllipsize(TextUtils.TruncateAt.END);
         info.addView(nowArtistView, matchWrap());
@@ -2271,6 +2256,7 @@ public class MainActivity extends Activity {
         info.addView(nowAlbumView, matchWrap());
 
         queueView = new TextView(this);
+        queueView.setTag("player-queue");
         queueView.setText(R.string.queue_empty);
         queueView.setTextColor(COLOR_MUTED);
         queueView.setTextSize(13);
@@ -2280,40 +2266,31 @@ public class MainActivity extends Activity {
         queueParams.setMargins(0, dp(8), 0, dp(10));
         info.addView(queueView, queueParams);
 
-        LinearLayout transport = row();
-        transport.setGravity(Gravity.CENTER);
+        PlayerButtonLayout transport = new PlayerButtonLayout(this, true);
+        transport.setTag("player-transport");
         LinearLayout.LayoutParams transportParams = matchWrap();
-        transportParams.setMargins(0, dp(14), 0, 0);
+        transportParams.setMargins(0, dp(6), 0, 0);
         info.addView(transport, transportParams);
         int sideSize = wide ? dp(64) : dp(58);
         int playSize = wide ? dp(82) : dp(74);
         ImageButton prev = transportButton(R.drawable.ic_player_previous, COLOR_SURFACE_2, COLOR_TEXT, sideSize, getString(R.string.previous_track));
         prev.setOnClickListener(v -> sendPlayerAction(YmpPlaybackService.ACTION_PREVIOUS));
-        transport.addView(prev, compactButtonParams(sideSize + dp(8)));
+        transport.addView(prev);
         ImageButton stop = transportButton(R.drawable.ic_player_stop, COLOR_SURFACE_2, COLOR_TEXT, sideSize, getString(R.string.stop_playback));
         stop.setOnClickListener(v -> sendPlayerAction(YmpPlaybackService.ACTION_STOP));
-        transport.addView(stop, compactButtonParams(sideSize + dp(8)));
+        transport.addView(stop);
         playPauseButton = transportButton(R.drawable.ic_player_play, COLOR_SURFACE_2, COLOR_TEXT, playSize, getString(R.string.play_pause));
         playPauseButton.setOnClickListener(v -> handlePlayPause());
-        transport.addView(playPauseButton, compactButtonParams(playSize + dp(10)));
+        transport.addView(playPauseButton);
         ImageButton next = transportButton(R.drawable.ic_player_next, COLOR_SURFACE_2, COLOR_TEXT, sideSize, getString(R.string.next_track));
         next.setOnClickListener(v -> sendPlayerAction(YmpPlaybackService.ACTION_NEXT));
-        transport.addView(next, compactButtonParams(sideSize + dp(8)));
+        transport.addView(next);
         queueModeButton = transportButton(R.drawable.ic_player_order, COLOR_SURFACE_2, COLOR_TEXT, sideSize, getString(R.string.queue_mode_order));
         queueModeButton.setOnClickListener(v -> sendPlayerAction(YmpPlaybackService.ACTION_TOGGLE_SHUFFLE));
-        transport.addView(queueModeButton, compactButtonParams(sideSize + dp(8)));
+        transport.addView(queueModeButton);
         equalizerButton = transportButton(R.drawable.ic_player_equalizer, COLOR_SURFACE_2, COLOR_TEXT, sideSize, getString(R.string.open_equalizer));
         equalizerButton.setOnClickListener(v -> openEqualizer());
-        if (wide) {
-            transport.addView(equalizerButton, compactButtonParams(sideSize + dp(8)));
-        } else {
-            LinearLayout tools = row();
-            tools.setGravity(Gravity.CENTER);
-            LinearLayout.LayoutParams toolsParams = matchWrap();
-            toolsParams.setMargins(0, dp(10), 0, 0);
-            info.addView(tools, toolsParams);
-            tools.addView(equalizerButton, compactButtonParams(sideSize + dp(8)));
-        }
+        transport.addView(equalizerButton);
         updateTransportVisuals();
     }
 
@@ -2333,12 +2310,15 @@ public class MainActivity extends Activity {
         top.setGravity(Gravity.CENTER_VERTICAL);
         shell.addView(top, matchWrap());
 
-        Button back = smallButton(getString(R.string.settings_back), COLOR_SURFACE_2, COLOR_TEXT);
+        ImageButton back = smallIconButton(R.drawable.ic_player_previous, COLOR_SURFACE_2,
+                COLOR_TEXT, dp(48), getString(R.string.settings_back));
         back.setVisibility(View.GONE);
-        top.addView(back, compactButtonParams(dp(104)));
+        top.addView(back, new LinearLayout.LayoutParams(dp(48), dp(48)));
 
         TextView title = sectionTitle(getString(R.string.settings_title));
-        title.setTextSize(25);
+        title.setTextSize(20);
+        title.setMaxLines(2);
+        title.setEllipsize(TextUtils.TruncateAt.END);
         title.setGravity(Gravity.CENTER_VERTICAL);
         LinearLayout.LayoutParams titleParams = new LinearLayout.LayoutParams(
                 0,
@@ -2347,18 +2327,10 @@ public class MainActivity extends Activity {
         );
         titleParams.setMargins(dp(10), 0, dp(10), 0);
         top.addView(title, titleParams);
-        Button close = smallButton(getString(R.string.settings_close), COLOR_SURFACE_2, COLOR_TEXT);
+        ImageButton close = smallIconButton(R.drawable.ic_player_close, COLOR_SURFACE_2,
+                COLOR_TEXT, dp(48), getString(R.string.settings_close));
         close.setOnClickListener(v -> dialog.dismiss());
-        top.addView(close, compactButtonParams(dp(110)));
-
-        settingsFeedbackView = new TextView(this);
-        settingsFeedbackView.setTextColor(COLOR_TEXT);
-        settingsFeedbackView.setTextSize(14);
-        settingsFeedbackView.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-        settingsFeedbackView.setPadding(dp(13), dp(10), dp(13), dp(10));
-        settingsFeedbackView.setBackground(panelBg(0xff17362f, dp(10), 0xff2a7463));
-        settingsFeedbackView.setVisibility(View.GONE);
-        shell.addView(settingsFeedbackView, spaced());
+        top.addView(close, new LinearLayout.LayoutParams(dp(48), dp(48)));
 
         FrameLayout contentHost = new FrameLayout(this);
         shell.addView(contentHost, new LinearLayout.LayoutParams(
@@ -2379,7 +2351,8 @@ public class MainActivity extends Activity {
             return false;
         });
 
-        dialog.setContentView(shell);
+        LinearLayout settingsScreen = screenShell(shell);
+        dialog.setContentView(settingsScreen);
         Window window = dialog.getWindow();
         if (window != null) {
             window.setBackgroundDrawable(new ColorDrawable(COLOR_BG));
@@ -2395,6 +2368,7 @@ public class MainActivity extends Activity {
                         WindowManager.LayoutParams.MATCH_PARENT,
                         WindowManager.LayoutParams.MATCH_PARENT
                 );
+                SafeWindow.install(shown, settingsScreen);
             }
             navigator.showIndex();
             if (shown != null) {
@@ -2402,7 +2376,6 @@ public class MainActivity extends Activity {
             }
         });
         dialog.setOnDismissListener(d -> {
-            settingsFeedbackView = null;
             clearSettingsSectionViews();
         });
         dialog.show();
@@ -2411,12 +2384,12 @@ public class MainActivity extends Activity {
     private final class SettingsNavigator {
         private final FrameLayout host;
         private final TextView title;
-        private final Button back;
+        private final ImageButton back;
         private final Map<Integer, View> categoryViews = new LinkedHashMap<>();
         private int currentSection;
         private int lastSection = SETTINGS_ACTION_ABOUT;
 
-        SettingsNavigator(FrameLayout host, TextView title, Button back) {
+        SettingsNavigator(FrameLayout host, TextView title, ImageButton back) {
             this.host = host;
             this.title = title;
             this.back = back;
@@ -2599,12 +2572,8 @@ public class MainActivity extends Activity {
         private void showScreen(ScrollView scroll) {
             installInteractiveFeedbackTree(scroll);
             host.removeAllViews();
-            int screenWidth = getResources().getDisplayMetrics().widthPixels;
-            int width = isWideLayout()
-                    ? Math.min(dp(900), Math.max(dp(320), screenWidth - dp(72)))
-                    : ViewGroup.LayoutParams.MATCH_PARENT;
             FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(
-                    width,
+                    ViewGroup.LayoutParams.MATCH_PARENT,
                     ViewGroup.LayoutParams.MATCH_PARENT,
                     Gravity.TOP | Gravity.CENTER_HORIZONTAL
             );
@@ -4431,30 +4400,16 @@ public class MainActivity extends Activity {
     }
 
     private void updateStatus(String text) {
-        if (statusView != null) {
-            statusView.setText(text);
+        latestStatus = text == null ? "" : text;
+        statusBars.removeIf(reference -> reference.get() == null);
+        for (WeakReference<AppStatusBar> reference : statusBars) {
+            AppStatusBar bar = reference.get();
+            if (bar != null) bar.setText(latestStatus);
         }
-        updateSettingsFeedback(text);
     }
 
     private void updateSettingsFeedback(String text) {
-        TextView feedback = settingsFeedbackView;
-        if (feedback == null || text == null) {
-            return;
-        }
-        String primary = text.trim();
-        int cacheSeparator = primary.indexOf("\n\n");
-        if (cacheSeparator >= 0) {
-            primary = primary.substring(0, cacheSeparator).trim();
-        }
-        if (primary.isEmpty()) {
-            return;
-        }
-        feedback.animate().cancel();
-        feedback.setText(getString(R.string.settings_status_template, primary));
-        feedback.setAlpha(0f);
-        feedback.setVisibility(View.VISIBLE);
-        feedback.animate().alpha(1f).setDuration(140L).start();
+        updateStatus(statusWithCache(text));
     }
 
     private String statusWithCache(String primary) {
@@ -4474,21 +4429,22 @@ public class MainActivity extends Activity {
             } catch (Exception ex) {
                 value = "Cache status unavailable: " + ex.getMessage();
             }
+            String previous = cachedCacheStatus;
             cachedCacheStatus = value;
             cacheStatusLoading = false;
+            String loaded = value;
+            runOnUiThread(() -> {
+                String suffix = "\n\n" + previous;
+                if (!isDestroyed() && latestStatus.endsWith(suffix)) {
+                    updateStatus(latestStatus.substring(0, latestStatus.length() - suffix.length()) + "\n\n" + loaded);
+                }
+            });
         }, "YMP-CacheStatus").start();
     }
 
     private boolean isWideLayout() {
         Configuration config = getResources().getConfiguration();
-        return config.orientation == Configuration.ORIENTATION_LANDSCAPE || config.screenWidthDp >= 720;
-    }
-
-    private int coverSize(boolean wide) {
-        Configuration config = getResources().getConfiguration();
-        int minDp = Math.min(config.screenWidthDp, config.screenHeightDp);
-        int sizeDp = wide ? Math.min(320, Math.max(210, minDp - 56)) : Math.min(360, Math.max(220, config.screenWidthDp - 72));
-        return dp(sizeDp);
+        return config.orientation == Configuration.ORIENTATION_LANDSCAPE && config.screenWidthDp >= 600;
     }
 
     private int dp(int value) {
@@ -4594,6 +4550,9 @@ public class MainActivity extends Activity {
 
     private Button smallButton(String text, int bgColor, int textColor) {
         Button button = new Button(this);
+        button.setStateListAnimator(null);
+        button.setLetterSpacing(0f);
+        button.setTypeface(Typeface.DEFAULT, Typeface.NORMAL);
         button.setText(text);
         button.setTextColor(textColor);
         button.setTextSize(14);

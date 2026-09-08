@@ -123,7 +123,7 @@ public final class ClipWaveActivity extends Activity {
     private TextView loadingTextView;
     private TextView titleView;
     private TextView artistView;
-    private TextView statusView;
+    private AppStatusBar statusView;
     private TextView transientTitleView;
     private TextView transientArtistView;
     private TextView clipTimeView;
@@ -426,6 +426,7 @@ public final class ClipWaveActivity extends Activity {
         }
         View content = buildContent();
         setContentView(content);
+        SafeWindow.install(getWindow(), content);
         installInteractiveFeedbackTree(content);
         playerView.setPlayer(player);
         updateClipText();
@@ -457,7 +458,8 @@ public final class ClipWaveActivity extends Activity {
     }
 
     private View buildContent() {
-        boolean wide = getResources().getConfiguration().orientation == Configuration.ORIENTATION_LANDSCAPE;
+        boolean wide = getResources().getConfiguration().screenWidthDp >= 600
+                && getResources().getConfiguration().orientation == Configuration.ORIENTATION_LANDSCAPE;
         FrameLayout root = new FrameLayout(this);
         root.setBackgroundColor(COLOR_BG);
 
@@ -636,19 +638,11 @@ public final class ClipWaveActivity extends Activity {
                 dp(22)
         ));
 
-        statusView = new TextView(this);
-        statusView.setTextColor(0xff8296a5);
-        statusView.setTextSize(12);
-        statusView.setSingleLine(true);
-        statusView.setEllipsize(TextUtils.TruncateAt.END);
-        LinearLayout.LayoutParams statusParams = matchWrap();
-        statusParams.setMargins(0, dp(5), 0, 0);
-        info.addView(statusView, statusParams);
+        statusView = new AppStatusBar(this);
 
-        LinearLayout controls = new LinearLayout(this);
-        controls.setOrientation(LinearLayout.HORIZONTAL);
-        controls.setGravity(Gravity.CENTER);
-        LinearLayout.LayoutParams controlsParams = wrapWrap();
+        PlayerButtonLayout controls = new PlayerButtonLayout(this, true, 1);
+        LinearLayout.LayoutParams controlsParams = new LinearLayout.LayoutParams(
+                wide ? dp(320) : ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         controlsParams.setMargins(wide ? dp(20) : 0, wide ? 0 : dp(14), 0, 0);
         content.addView(controls, controlsParams);
 
@@ -659,31 +653,36 @@ public final class ClipWaveActivity extends Activity {
                 getString(R.string.clip_wave_previous)
         );
         previousButton.setOnClickListener(v -> playPreviousClip());
-        controls.addView(previousButton, controlParams(side));
+        controls.addView(previousButton);
 
         playPauseButton = roundIconButton(
                 R.drawable.ic_player_play, play, COLOR_ACCENT, COLOR_BG,
                 getString(R.string.play_pause)
         );
         playPauseButton.setOnClickListener(v -> togglePlayback());
-        controls.addView(playPauseButton, controlParams(play));
+        controls.addView(playPauseButton);
 
         nextButton = roundIconButton(
                 R.drawable.ic_player_next, side, COLOR_SURFACE, COLOR_TEXT,
                 getString(R.string.clip_wave_next)
         );
         nextButton.setOnClickListener(v -> requestAdvance(false));
-        controls.addView(nextButton, controlParams(side));
+        controls.addView(nextButton);
 
         likeButton = roundIconButton(
                 R.drawable.ic_player_like, side, COLOR_SURFACE, COLOR_TEXT,
                 getString(R.string.like_track)
         );
         likeButton.setOnClickListener(v -> toggleCurrentLike());
-        controls.addView(likeButton, controlParams(side));
+        controls.addView(likeButton);
 
         root.setOnClickListener(v -> toggleOverlay());
-        return root;
+        LinearLayout shell = new LinearLayout(this);
+        shell.setOrientation(LinearLayout.VERTICAL);
+        shell.setBackgroundColor(COLOR_BG);
+        shell.addView(root, new LinearLayout.LayoutParams(-1, 0, 1f));
+        shell.addView(statusView, new LinearLayout.LayoutParams(-1, -2));
+        return shell;
     }
 
     private void startClipWave() {
@@ -1647,6 +1646,7 @@ public final class ClipWaveActivity extends Activity {
             }
         }
         getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_VISIBLE);
+        androidx.core.view.WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
     }
 
     private List<ClipWaveClient.Clip> uniqueClips(List<ClipWaveClient.Clip> source) {
