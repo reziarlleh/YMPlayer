@@ -10,8 +10,8 @@ android {
         applicationId "dev.petrov.yaplay"
         minSdk 29
         targetSdk 35
-        versionCode 111
-        versionName "1.0.0-beta.11"
+        versionCode 112
+        versionName "1.0.0-beta.12"
     }
 
     buildTypes {
@@ -54,6 +54,7 @@ android {
 dependencies {
     testImplementation "junit:junit:4.13.2"
     testImplementation "org.robolectric:robolectric:4.16"
+    testImplementation "org.mockito:mockito-core:5.23.0"
     def media3Version = "1.5.1"
 
     compileOnly "androidx.annotation:annotation:1.6.0"

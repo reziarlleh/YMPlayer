@@ -691,13 +691,19 @@ public final class YandexMusicClient {
             if (parent != null && !parent.exists() && !parent.mkdirs()) {
                 throw new IOException("Unable to create directory: " + parent);
             }
+            long expectedBytes = connection.getContentLengthLong();
+            long receivedBytes = 0;
             try (BufferedInputStream in = new BufferedInputStream(connection.getInputStream());
                  FileOutputStream out = new FileOutputStream(target)) {
                 byte[] buffer = new byte[128 * 1024];
                 int read;
                 while ((read = in.read(buffer)) != -1) {
                     out.write(buffer, 0, read);
+                    receivedBytes += read;
                 }
+            }
+            if (expectedBytes >= 0 && receivedBytes != expectedBytes) {
+                throw new IOException("Incomplete audio download: " + receivedBytes + "/" + expectedBytes + " bytes");
             }
         } finally {
             connection.disconnect();

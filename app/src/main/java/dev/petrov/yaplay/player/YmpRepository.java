@@ -15,6 +15,7 @@ import java.util.Locale;
 import java.util.Set;
 
 import dev.petrov.yaplay.Diagnostics;
+import dev.petrov.yaplay.R;
 import dev.petrov.yaplay.cache.YandexTrackCache;
 import dev.petrov.yaplay.ymusic.TokenStore;
 import dev.petrov.yaplay.ymusic.YandexMusicClient;
@@ -395,8 +396,11 @@ public final class YmpRepository {
         long uid = account().uid;
         Map<String, YandexMusicClient.Track> unique = new LinkedHashMap<>();
 
-        notifyProgress(progress, "Loading favorite tracks...");
+        notifyProgress(progress, context.getString(R.string.cache_sync_loading));
         addUnique(unique, client.getLikedTracks(uid));
+        if (isCancelled(progress)) {
+            return new CacheSyncResult(unique.size(), 0, 0, 0, 0, 0, 0, 0, 0, true);
+        }
         int removed = audioCache.pruneLikedTracks(unique.keySet());
         if (removed > 0) {
             notifyProgress(progress, "Removed " + removed + " tracks no longer in favorites");
@@ -407,6 +411,8 @@ public final class YmpRepository {
         int failed = 0;
         int coversDownloaded = 0;
         int coverFailures = 0;
+        int coversPresent = 0;
+        int coversUnavailable = 0;
         int index = 1;
         for (YandexMusicClient.Track track : unique.values()) {
             if (isCancelled(progress)) {
@@ -418,21 +424,24 @@ public final class YmpRepository {
                         removed,
                         coversDownloaded,
                         coverFailures,
+                        coversPresent,
+                        coversUnavailable,
                         true
                 );
-                Diagnostics.log(context, result.summaryText());
+                Diagnostics.log(context, result.summaryText(context));
                 return result;
             }
-            boolean alreadyCached = audioCache.hasLikedTrack(track.key);
-            notifyProgress(progress, (alreadyCached ? "Checking " : "Downloading ")
-                    + index + "/" + unique.size() + ": "
-                    + track.artist + " - " + track.title);
+            notifyProgress(progress, context.getString(R.string.cache_sync_checking,
+                    index, unique.size(), track.artist + " - " + track.title));
             try {
-                YandexTrackCache.ArtworkSyncResult artwork = audioCache.cacheLiked(client, track);
-                if (alreadyCached) {
-                    skipped++;
-                } else {
+                YandexTrackCache.LikedSyncResult item = audioCache.cacheLiked(client, track);
+                YandexTrackCache.ArtworkSyncResult artwork = item.artwork;
+                if (item.audioFailure != null) {
+                    failed++;
+                } else if (item.audioDownloaded) {
                     downloaded++;
+                } else {
+                    skipped++;
                 }
                 if (artwork == YandexTrackCache.ArtworkSyncResult.DOWNLOADED) {
                     coversDownloaded++;
@@ -440,6 +449,10 @@ public final class YmpRepository {
                             + track.artist + " - " + track.title);
                 } else if (artwork == YandexTrackCache.ArtworkSyncResult.FAILED) {
                     coverFailures++;
+                } else if (artwork == YandexTrackCache.ArtworkSyncResult.NO_SOURCE) {
+                    coversUnavailable++;
+                } else {
+                    coversPresent++;
                 }
             } catch (Exception ex) {
                 failed++;
@@ -458,84 +471,11 @@ public final class YmpRepository {
                 removed,
                 coversDownloaded,
                 coverFailures,
+                coversPresent,
+                coversUnavailable,
                 false
         );
-        Diagnostics.log(context, result.summaryText());
-        return result;
-    }
-
-    public synchronized ArtworkCacheSyncResult syncFavoriteArtworkCache(CacheProgress progress) throws Exception {
-        Diagnostics.log(context, "YMP favorite artwork sync started");
-        YandexMusicClient client = client();
-        long uid = account().uid;
-        Map<String, YandexMusicClient.Track> unique = new LinkedHashMap<>();
-
-        notifyProgress(progress, "Loading favorite tracks for artwork sync...");
-        addUnique(unique, client.getLikedTracks(uid));
-
-        int cachedTracks = 0;
-        int present = 0;
-        int downloaded = 0;
-        int noSource = 0;
-        int failed = 0;
-        int notCached = 0;
-        int index = 1;
-        for (YandexMusicClient.Track track : unique.values()) {
-            if (isCancelled(progress)) {
-                ArtworkCacheSyncResult result = new ArtworkCacheSyncResult(
-                        unique.size(), cachedTracks, present, downloaded,
-                        noSource, failed, notCached, true
-                );
-                Diagnostics.log(context, result.summaryText());
-                return result;
-            }
-
-            if (!audioCache.hasLikedTrack(track.key)) {
-                notCached++;
-                index++;
-                continue;
-            }
-
-            cachedTracks++;
-            notifyProgress(progress, "Checking artwork " + index + "/" + unique.size() + ": "
-                    + track.artist + " - " + track.title);
-            try {
-                YandexTrackCache.ArtworkSyncResult artwork = audioCache.cacheLikedArtwork(client, track);
-                switch (artwork) {
-                    case PRESENT:
-                        present++;
-                        break;
-                    case DOWNLOADED:
-                        downloaded++;
-                        notifyProgress(progress, "Artwork downloaded " + index + "/" + unique.size() + ": "
-                                + track.artist + " - " + track.title);
-                        break;
-                    case NO_SOURCE:
-                        noSource++;
-                        break;
-                    case NOT_CACHED:
-                        cachedTracks--;
-                        notCached++;
-                        break;
-                    case FAILED:
-                    default:
-                        failed++;
-                        break;
-                }
-            } catch (Exception ex) {
-                failed++;
-                Diagnostics.log(context, "YMP unable to sync liked artwork " + track.key, ex);
-                notifyProgress(progress, "Artwork failed " + index + "/" + unique.size() + ": "
-                        + track.title + " (" + ex.getMessage() + ")");
-            }
-            index++;
-        }
-
-        ArtworkCacheSyncResult result = new ArtworkCacheSyncResult(
-                unique.size(), cachedTracks, present, downloaded,
-                noSource, failed, notCached, false
-        );
-        Diagnostics.log(context, result.summaryText());
+        Diagnostics.log(context, result.summaryText(context));
         return result;
     }
 
@@ -568,7 +508,10 @@ public final class YmpRepository {
         }
         client().likeTrack(uid, track.key);
         if (autoCache) {
-            audioCache.cacheLiked(client(), track);
+            YandexTrackCache.LikedSyncResult result = audioCache.cacheLiked(client(), track);
+            if (result.audioFailure != null) {
+                throw result.audioFailure;
+            }
         }
         Diagnostics.log(context, "YMP liked track: " + track.key + ", autoCache=" + autoCache);
     }
@@ -779,6 +722,8 @@ public final class YmpRepository {
         public final int removed;
         public final int coversDownloaded;
         public final int coverFailures;
+        public final int coversPresent;
+        public final int coversUnavailable;
         public final boolean cancelled;
 
         CacheSyncResult(
@@ -789,6 +734,8 @@ public final class YmpRepository {
                 int removed,
                 int coversDownloaded,
                 int coverFailures,
+                int coversPresent,
+                int coversUnavailable,
                 boolean cancelled
         ) {
             this.total = total;
@@ -798,60 +745,17 @@ public final class YmpRepository {
             this.removed = removed;
             this.coversDownloaded = coversDownloaded;
             this.coverFailures = coverFailures;
+            this.coversPresent = coversPresent;
+            this.coversUnavailable = coversUnavailable;
             this.cancelled = cancelled;
         }
 
-        public String summaryText() {
-            String status = cancelled ? "Cache sync cancelled" : "Cache sync complete";
-            return status + ": favorites " + total
-                    + ", downloaded " + downloaded
-                    + ", already cached " + skipped
-                    + ", covers restored " + coversDownloaded
-                    + ", cover failures " + coverFailures
-                    + ", removed non-favorites " + removed
-                    + ", failed " + failed;
-        }
-    }
-
-    public static final class ArtworkCacheSyncResult {
-        public final int totalFavorites;
-        public final int cachedTracks;
-        public final int present;
-        public final int downloaded;
-        public final int noSource;
-        public final int failed;
-        public final int notCached;
-        public final boolean cancelled;
-
-        ArtworkCacheSyncResult(
-                int totalFavorites,
-                int cachedTracks,
-                int present,
-                int downloaded,
-                int noSource,
-                int failed,
-                int notCached,
-                boolean cancelled
-        ) {
-            this.totalFavorites = totalFavorites;
-            this.cachedTracks = cachedTracks;
-            this.present = present;
-            this.downloaded = downloaded;
-            this.noSource = noSource;
-            this.failed = failed;
-            this.notCached = notCached;
-            this.cancelled = cancelled;
-        }
-
-        public String summaryText() {
-            String status = cancelled ? "Artwork sync cancelled" : "Artwork sync complete";
-            return status + ": favorites " + totalFavorites
-                    + ", cached tracks " + cachedTracks
-                    + ", downloaded " + downloaded
-                    + ", already present " + present
-                    + ", no artwork source " + noSource
-                    + ", not downloaded " + notCached
-                    + ", failed " + failed;
+        public String summaryText(Context context) {
+            int status = cancelled ? R.string.cache_sync_cancelled
+                    : failed + coverFailures > 0 ? R.string.cache_sync_partial : R.string.cache_sync_complete;
+            return context.getString(status) + "\n" + context.getString(R.string.cache_sync_summary,
+                    total, downloaded, skipped, failed, coversDownloaded, coversPresent,
+                    coversUnavailable, coverFailures, removed);
         }
     }
 }

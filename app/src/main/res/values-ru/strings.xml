@@ -57,8 +57,14 @@
     <string name="save_token">Сохранить OAuth-токен</string>
     <string name="test_account">Проверить аккаунт</string>
     <string name="clear_token">Удалить сохраненный токен</string>
-    <string name="sync_favorite_tracks">Синхронизировать «Мне нравится»</string>
-    <string name="sync_favorite_artwork">Синхронизировать обложки для избранного</string>
+    <string name="sync_favorite_tracks">Синхронизировать избранное</string>
+    <string name="cache_sync_starting">Запуск синхронизации музыки и обложек…</string>
+    <string name="cache_sync_loading">Загрузка списка избранного…</string>
+    <string name="cache_sync_checking">Проверка музыки и обложки %1$d/%2$d: %3$s</string>
+    <string name="cache_sync_complete">Синхронизация завершена</string>
+    <string name="cache_sync_partial">Синхронизация завершена с ошибками</string>
+    <string name="cache_sync_cancelled">Синхронизация отменена</string>
+    <string name="cache_sync_summary">Избранных треков: %1$d\nМузыка: скачано/восстановлено %2$d, исправных %3$d, ошибок %4$d\nОбложки: скачано/восстановлено %5$d, исправных %6$d, нет у источника %7$d, ошибок %8$d\nУдалено из кэша после снятия лайка: %9$d</string>
     <string name="cancel_cache_sync">Остановить синхронизацию</string>
     <string name="show_cache_status">Показать состояние кэша</string>
     <string name="clear_local_cache">Очистить локальный кэш</string>

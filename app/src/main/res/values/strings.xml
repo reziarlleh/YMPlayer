@@ -299,8 +299,14 @@
     <string name="save_token">Save OAuth token</string>
     <string name="test_account">Check account</string>
     <string name="clear_token">Clear saved token</string>
-    <string name="sync_favorite_tracks">Sync Favorites (Liked tracks)</string>
-    <string name="sync_favorite_artwork">Sync artwork for Favorites</string>
+    <string name="sync_favorite_tracks">Sync Favorites</string>
+    <string name="cache_sync_starting">Starting music and artwork sync…</string>
+    <string name="cache_sync_loading">Loading Favorites…</string>
+    <string name="cache_sync_checking">Checking music and artwork %1$d/%2$d: %3$s</string>
+    <string name="cache_sync_complete">Sync complete</string>
+    <string name="cache_sync_partial">Sync finished with errors</string>
+    <string name="cache_sync_cancelled">Sync cancelled</string>
+    <string name="cache_sync_summary">Favorite tracks: %1$d\nMusic: downloaded/repaired %2$d, healthy %3$d, failed %4$d\nArtwork: downloaded/repaired %5$d, healthy %6$d, no source %7$d, failed %8$d\nRemoved after unlike: %9$d</string>
     <string name="cancel_cache_sync">Cancel cache sync</string>
     <string name="show_cache_status">Show cache status</string>
     <string name="clear_local_cache">Clear local cache</string>

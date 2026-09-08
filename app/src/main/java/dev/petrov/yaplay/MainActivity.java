@@ -3130,7 +3130,6 @@ public class MainActivity extends Activity {
         root.addView(autoCacheLikedBox, spaced());
 
         addButton(root, R.string.sync_favorite_tracks, v -> startFavoritesCacheSync());
-        addButton(root, R.string.sync_favorite_artwork, v -> startFavoriteArtworkSync());
         addButton(root, R.string.cancel_cache_sync, v -> cancelCacheSync());
         addButton(root, R.string.show_cache_status, v -> updateStatus(statusWithCache(CacheSyncService.lastStatus())));
         addButton(root, R.string.clear_local_cache, v -> clearLocalCache());
@@ -4225,14 +4224,6 @@ public class MainActivity extends Activity {
     }
 
     private void startFavoritesCacheSync() {
-        startFavoritesCacheSync(false);
-    }
-
-    private void startFavoriteArtworkSync() {
-        startFavoritesCacheSync(true);
-    }
-
-    private void startFavoritesCacheSync(boolean artworkOnly) {
         persistTypedToken();
         if (TokenStore.getAccessToken(this).trim().isEmpty()) {
             Diagnostics.log(this, "YMP cache sync blocked: no token");
@@ -4247,21 +4238,15 @@ public class MainActivity extends Activity {
         saveCacheSettings();
         boolean wifiOnly = wifiOnlyBox != null ? wifiOnlyBox.isChecked() : CacheSettings.isWifiOnly(this);
         boolean chargingOnly = chargingOnlyBox != null ? chargingOnlyBox.isChecked() : CacheSettings.isChargingOnly(this);
-        String operation = artworkOnly ? "YMP favorite artwork sync requested" : "YMP favorite cache sync requested";
-        Diagnostics.log(this, operation
+        Diagnostics.log(this, "YMP favorite audio and artwork sync requested"
                 + ", wifiOnly=" + wifiOnly
                 + ", chargingOnly=" + chargingOnly);
         Intent intent = new Intent(this, CacheSyncService.class);
         intent.setAction(CacheSyncService.ACTION_SYNC);
-        intent.putExtra(CacheSyncService.EXTRA_INCLUDE_LIKED, true);
-        intent.putExtra(CacheSyncService.EXTRA_INCLUDE_PLAYLISTS, false);
-        intent.putExtra(CacheSyncService.EXTRA_ARTWORK_ONLY, artworkOnly);
         intent.putExtra(CacheSyncService.EXTRA_WIFI_ONLY, wifiOnly);
         intent.putExtra(CacheSyncService.EXTRA_CHARGING_ONLY, chargingOnly);
         startForegroundService(intent);
-        updateStatus(statusWithCache(artworkOnly
-                ? "Starting favorite artwork sync..."
-                : "Starting cache sync service..."));
+        updateStatus(statusWithCache(getString(R.string.cache_sync_starting)));
     }
 
     private void cancelCacheSync() {

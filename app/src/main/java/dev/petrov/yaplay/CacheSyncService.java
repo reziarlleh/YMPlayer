@@ -24,9 +24,6 @@ public class CacheSyncService extends Service {
     public static final String ACTION_SYNC = "dev.petrov.yaplay.action.CACHE_SYNC";
     public static final String ACTION_CANCEL = "dev.petrov.yaplay.action.CACHE_CANCEL";
     public static final String ACTION_STATUS = "dev.petrov.yaplay.action.CACHE_STATUS";
-    public static final String EXTRA_INCLUDE_LIKED = "include_liked";
-    public static final String EXTRA_INCLUDE_PLAYLISTS = "include_playlists";
-    public static final String EXTRA_ARTWORK_ONLY = "artwork_only";
     public static final String EXTRA_WIFI_ONLY = "wifi_only";
     public static final String EXTRA_CHARGING_ONLY = "charging_only";
     public static final String EXTRA_STATUS = "status";
@@ -57,9 +54,6 @@ public class CacheSyncService extends Service {
             return START_NOT_STICKY;
         }
 
-        boolean includeLiked = intent == null || intent.getBooleanExtra(EXTRA_INCLUDE_LIKED, true);
-        boolean includePlaylists = intent != null && intent.getBooleanExtra(EXTRA_INCLUDE_PLAYLISTS, false);
-        boolean artworkOnly = intent != null && intent.getBooleanExtra(EXTRA_ARTWORK_ONLY, false);
         boolean wifiOnly = intent != null && intent.getBooleanExtra(EXTRA_WIFI_ONLY, true);
         boolean chargingOnly = intent != null && intent.getBooleanExtra(EXTRA_CHARGING_ONLY, false);
 
@@ -69,13 +63,10 @@ public class CacheSyncService extends Service {
             return START_NOT_STICKY;
         }
 
-        Diagnostics.log(this, "Cache service starting: liked=" + includeLiked + ", playlists=" + includePlaylists
-                + ", artworkOnly=" + artworkOnly
+        Diagnostics.log(this, "Favorite audio and artwork sync starting"
                 + ", wifiOnly=" + wifiOnly + ", chargingOnly=" + chargingOnly);
         createChannel();
-        startForeground(NOTIFICATION_ID, notification(artworkOnly
-                ? "Starting favorite artwork sync..."
-                : "Starting cache sync..."));
+        startForeground(NOTIFICATION_ID, notification(getString(R.string.cache_sync_starting)));
 
         if (wifiOnly && !isOnWifi()) {
             Diagnostics.log(this, "Cache service skipped: Wi-Fi required");
@@ -91,8 +82,8 @@ public class CacheSyncService extends Service {
         running = true;
         cancelRequested = false;
         worker = new Thread(
-                () -> runSync(includeLiked, includePlaylists, artworkOnly),
-                artworkOnly ? "YMP-ArtworkSyncService" : "YMP-CacheSyncService"
+                this::runSync,
+                "YMP-CacheSyncService"
         );
         worker.start();
         return START_NOT_STICKY;
@@ -111,34 +102,9 @@ public class CacheSyncService extends Service {
         return lastStatus;
     }
 
-    private void runSync(boolean includeLiked, boolean includePlaylists, boolean artworkOnly) {
+    private void runSync() {
         YmpRepository repository = new YmpRepository(this);
         try {
-            if (!includeLiked) {
-                updateStatus("Favorite cache sync skipped: liked tracks are disabled");
-                return;
-            }
-            if (includePlaylists) {
-                Diagnostics.log(this, "Cache service ignored playlist caching request: permanent cache is liked-only");
-            }
-            if (artworkOnly) {
-                YmpRepository.ArtworkCacheSyncResult result = repository.syncFavoriteArtworkCache(
-                        new YmpRepository.CacheProgress() {
-                            @Override
-                            public void onProgress(String message) {
-                                updateStatus(message);
-                            }
-
-                            @Override
-                            public boolean isCancelled() {
-                                return cancelRequested;
-                            }
-                        }
-                );
-                Diagnostics.log(this, result.summaryText());
-                updateStatus(result.summaryText() + "\n" + repository.cacheStatusText());
-                return;
-            }
             YmpRepository.CacheSyncResult result = repository.syncFavoriteCache(new YmpRepository.CacheProgress() {
                 @Override
                 public void onProgress(String message) {
@@ -150,8 +116,8 @@ public class CacheSyncService extends Service {
                     return cancelRequested;
                 }
             });
-            Diagnostics.log(this, result.summaryText());
-            updateStatus(result.summaryText() + "\n" + repository.cacheStatusText() + "\nOpen downloaded favorites in YMPlayer to play offline.");
+            Diagnostics.log(this, result.summaryText(this));
+            updateStatus(result.summaryText(this) + "\n" + repository.cacheStatusText());
         } catch (Exception ex) {
             Diagnostics.log(this, "Cache sync failed", ex);
             updateStatus("Cache sync failed: " + ex.getMessage());

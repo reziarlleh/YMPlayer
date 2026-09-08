@@ -1,7 +1,7 @@
 package dev.petrov.yaplay.cache;
 
 import android.content.Context;
-import android.graphics.BitmapFactory;
+import android.graphics.ImageDecoder;
 import android.os.ParcelFileDescriptor;
 
 import org.json.JSONException;
@@ -19,6 +19,8 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.ByteBuffer;
+import java.nio.file.Files;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
@@ -27,6 +29,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.HashSet;
 
 public final class YandexTrackCache {
     public static final long PLAYBACK_CACHE_LIMIT_BYTES = 256L * 1024L * 1024L;
@@ -66,24 +69,34 @@ public final class YandexTrackCache {
         return ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY);
     }
 
-    public synchronized ArtworkSyncResult cacheLiked(
+    public synchronized LikedSyncResult cacheLiked(
             YandexMusicClient client,
             YandexMusicClient.Track track
     ) throws IOException {
-        ensureCached(likedRoot, client, track, AudioQuality.from(YmpSettings.cacheQuality(context)));
-        return syncLikedArtwork(client, track);
-    }
-
-    public synchronized ArtworkSyncResult cacheLikedArtwork(
-            YandexMusicClient client,
-            YandexMusicClient.Track track
-    ) throws IOException {
-        if (track == null || !hasAudio(likedRoot, track.key)) {
-            return ArtworkSyncResult.NOT_CACHED;
+        boolean downloaded = false;
+        IOException audioFailure = null;
+        try {
+            File audio = audioFile(likedRoot, track.key);
+            CacheFileIntegrity.State state = CacheFileIntegrity.check(audio);
+            boolean present = state == CacheFileIntegrity.State.VALID
+                    || (state == CacheFileIntegrity.State.UNKNOWN && CachedMediaValidator.audio(audio, track.durationMs));
+            if (present) {
+                if (state == CacheFileIntegrity.State.UNKNOWN) {
+                    CacheFileIntegrity.remember(audio);
+                }
+                writeMetadata(likedRoot, track);
+            } else {
+                if (audio.exists()) {
+                    Diagnostics.log(context, "Repairing invalid favorite audio: " + track.key);
+                }
+                ensureCached(likedRoot, client, track, AudioQuality.from(YmpSettings.cacheQuality(context)), true);
+                downloaded = true;
+            }
+        } catch (IOException ex) {
+            audioFailure = ex;
+            Diagnostics.log(context, "Favorite audio sync failed: " + track.key, ex);
         }
-        // Refresh metadata too: older cache entries may not contain a cover URL.
-        writeMetadata(likedRoot, track);
-        return syncLikedArtwork(client, track);
+        return new LikedSyncResult(downloaded, audioFailure, syncLikedArtwork(client, track));
     }
 
     public static File likedArtworkFile(Context context, String trackKey) {
@@ -132,44 +145,24 @@ public final class YandexTrackCache {
         if (!likedRoot.exists()) {
             return 0;
         }
-        File[] audioFiles = likedRoot.listFiles((dir, name) -> name.endsWith(AUDIO_EXT));
-        if (audioFiles != null) {
-            for (File audio : audioFiles) {
-                String id = stripExtension(audio.getName(), AUDIO_EXT);
-                YandexMusicClient.Track track = metadataByCacheId(likedRoot, id);
-                if (track == null || !likedKeys.contains(track.key) || !isSupportedAudio(audio)) {
-                    if (audio.delete()) {
-                        removed++;
-                    }
-                    File meta = new File(likedRoot, id + META_EXT);
-                    if (meta.exists()) {
-                        meta.delete();
-                    }
-                    File cover = new File(likedRoot, id + COVER_EXT);
-                    if (cover.exists()) {
-                        cover.delete();
-                    }
-                }
-            }
+        Set<String> keepIds = new HashSet<>();
+        for (String key : likedKeys) {
+            keepIds.add(cacheId(key));
         }
-
-        File[] metadataFiles = likedRoot.listFiles((dir, name) -> name.endsWith(META_EXT));
-        if (metadataFiles != null) {
-            for (File meta : metadataFiles) {
-                String id = stripExtension(meta.getName(), META_EXT);
-                File audio = new File(likedRoot, id + AUDIO_EXT);
-                if (!audio.exists()) {
-                    meta.delete();
+        File[] files = likedRoot.listFiles();
+        if (files != null) {
+            for (File file : files) {
+                String name = file.getName();
+                int dot = name.indexOf('.');
+                if (name.endsWith(".tmp") && file.lastModified() < System.currentTimeMillis() - 86_400_000L) {
+                    // Do not interfere with a concurrent auto-download's fresh temporary file.
+                    file.delete();
+                    continue;
                 }
-            }
-        }
-        File[] coverFiles = likedRoot.listFiles((dir, name) -> name.endsWith(COVER_EXT));
-        if (coverFiles != null) {
-            for (File cover : coverFiles) {
-                String id = stripExtension(cover.getName(), COVER_EXT);
-                File audio = new File(likedRoot, id + AUDIO_EXT);
-                if (!audio.exists()) {
-                    cover.delete();
+                // Missing metadata/audio is repaired by sync, not grounds to discard a good cover.
+                if (dot > 0 && !keepIds.contains(name.substring(0, dot)) && file.delete()
+                        && name.endsWith(AUDIO_EXT)) {
+                    removed++;
                 }
             }
         }
@@ -212,8 +205,13 @@ public final class YandexTrackCache {
     }
 
     private File ensureCached(File root, YandexMusicClient client, YandexMusicClient.Track track, AudioQuality quality) throws IOException {
+        return ensureCached(root, client, track, quality, false);
+    }
+
+    private File ensureCached(File root, YandexMusicClient client, YandexMusicClient.Track track,
+                              AudioQuality quality, boolean repair) throws IOException {
         File file = audioFile(root, track.key);
-        if (file.exists()) {
+        if (file.exists() && !repair) {
             if (file.length() > 0L && isSupportedAudio(file)) {
                 touch(file);
                 writeMetadata(root, track);
@@ -221,16 +219,10 @@ public final class YandexTrackCache {
             }
             Diagnostics.log(context, "Removing invalid cached media for " + track.key
                     + ": bytes=" + file.length() + ", probe=" + probeHex(file));
-            deleteTrackFiles(root, track.key);
         }
 
         if (!root.exists() && !root.mkdirs()) {
             throw new IOException("Unable to create track cache");
-        }
-
-        File tmp = new File(root, file.getName() + ".tmp");
-        if (tmp.exists() && !tmp.delete()) {
-            throw new IOException("Unable to reset temporary cache file");
         }
 
         String directUrl;
@@ -240,22 +232,18 @@ public final class YandexTrackCache {
             throw new IOException("Unable to resolve media URL for " + track.key, ex);
         }
 
-        client.downloadToFile(directUrl, tmp);
-        if (!isSupportedAudio(tmp)) {
-            String probe = probeHex(tmp);
-            long length = tmp.length();
-            if (!tmp.delete()) {
-                tmp.deleteOnExit();
+        File tmp = File.createTempFile(file.getName(), ".tmp", root);
+        try {
+            client.downloadToFile(directUrl, tmp);
+            if (!isSupportedAudio(tmp) || (repair && !CachedMediaValidator.audio(tmp, track.durationMs))) {
+                throw new IOException("Downloaded media is incomplete or unreadable for " + track.key);
             }
-            Diagnostics.log(context, "Downloaded media is not recognized audio for " + track.key
-                    + ": bytes=" + length + ", probe=" + probe);
-            throw new IOException("Downloaded media is not recognized audio: " + probe);
-        }
-        if (!tmp.renameTo(file)) {
-            copyFile(tmp, file);
-            if (!tmp.delete()) {
-                tmp.deleteOnExit();
+            CacheFileIntegrity.replace(tmp, file);
+            if (repair) {
+                CacheFileIntegrity.remember(file);
             }
+        } finally {
+            Files.deleteIfExists(tmp.toPath());
         }
         touch(file);
         writeMetadata(root, track);
@@ -294,18 +282,6 @@ public final class YandexTrackCache {
             return fromJson(new JSONObject(readText(file)));
         } catch (JSONException ex) {
             throw new IOException("Invalid cached metadata for " + trackKey, ex);
-        }
-    }
-
-    private YandexMusicClient.Track metadataByCacheId(File root, String cacheId) {
-        File file = new File(root, cacheId + META_EXT);
-        if (!file.exists()) {
-            return null;
-        }
-        try {
-            return fromJson(new JSONObject(readText(file)));
-        } catch (Exception ignored) {
-            return null;
         }
     }
 
@@ -376,10 +352,14 @@ public final class YandexTrackCache {
 
     private void writeMetadata(File root, YandexMusicClient.Track track) throws IOException {
         File file = metadataFile(root, track.key);
-        try (FileOutputStream out = new FileOutputStream(file)) {
-            out.write(toJson(track).toString().getBytes(StandardCharsets.UTF_8));
+        File temp = File.createTempFile(file.getName(), ".tmp", root);
+        try {
+            Files.write(temp.toPath(), toJson(track).toString().getBytes(StandardCharsets.UTF_8));
+            CacheFileIntegrity.replace(temp, file);
         } catch (JSONException ex) {
             throw new IOException("Unable to serialize metadata for " + track.key, ex);
+        } finally {
+            Files.deleteIfExists(temp.toPath());
         }
     }
 
@@ -409,6 +389,8 @@ public final class YandexTrackCache {
         if (cover.exists() && !cover.delete()) {
             cover.deleteOnExit();
         }
+        CacheFileIntegrity.checksumFile(audio).delete();
+        CacheFileIntegrity.checksumFile(cover).delete();
     }
 
     private ArtworkSyncResult syncLikedArtwork(
@@ -419,18 +401,21 @@ public final class YandexTrackCache {
             return ArtworkSyncResult.NO_SOURCE;
         }
         File cover = artworkFile(likedRoot, track.key);
-        if (isValidArtwork(cover)) {
-            return ArtworkSyncResult.PRESENT;
-        }
-        if (cover.exists() && !cover.delete()) {
-            Diagnostics.log(context, "YMP unable to remove invalid liked artwork: " + cover.getName());
-        }
-
-        String coverUrl = track.coverUrl == null ? "" : track.coverUrl.trim();
-        if (!coverUrl.startsWith("https://") && !coverUrl.startsWith("http://")) {
-            return ArtworkSyncResult.NO_SOURCE;
-        }
         try {
+            CacheFileIntegrity.State state = CacheFileIntegrity.check(cover);
+            if (state == CacheFileIntegrity.State.VALID
+                    || (state == CacheFileIntegrity.State.UNKNOWN && isValidArtwork(cover))) {
+                if (state == CacheFileIntegrity.State.UNKNOWN) {
+                    CacheFileIntegrity.remember(cover);
+                }
+                return ArtworkSyncResult.PRESENT;
+            }
+            Files.deleteIfExists(cover.toPath());
+            Files.deleteIfExists(CacheFileIntegrity.checksumFile(cover).toPath());
+            String coverUrl = track.coverUrl == null ? "" : track.coverUrl.trim();
+            if (!coverUrl.startsWith("https://") && !coverUrl.startsWith("http://")) {
+                return ArtworkSyncResult.NO_SOURCE;
+            }
             byte[] bytes = client.downloadBytes(coverUrl);
             if (!isValidArtwork(bytes)) {
                 Diagnostics.log(context, "YMP liked artwork is not a valid image for " + track.key
@@ -438,6 +423,7 @@ public final class YandexTrackCache {
                 return ArtworkSyncResult.FAILED;
             }
             writeArtworkAtomically(cover, bytes);
+            CacheFileIntegrity.remember(cover);
             Diagnostics.log(context, "YMP liked artwork cached: " + track.key
                     + ", bytes=" + bytes.length);
             return ArtworkSyncResult.DOWNLOADED;
@@ -455,20 +441,18 @@ public final class YandexTrackCache {
         if (file == null || !file.exists() || file.length() <= 0L || file.length() > MAX_COVER_BYTES) {
             return false;
         }
-        BitmapFactory.Options bounds = new BitmapFactory.Options();
-        bounds.inJustDecodeBounds = true;
-        BitmapFactory.decodeFile(file.getAbsolutePath(), bounds);
-        return bounds.outWidth > 0 && bounds.outHeight > 0;
+        try {
+            return isValidArtwork(Files.readAllBytes(file.toPath()));
+        } catch (IOException ex) {
+            return false;
+        }
     }
 
     private static boolean isValidArtwork(byte[] bytes) {
         if (bytes == null || bytes.length == 0 || bytes.length > MAX_COVER_BYTES) {
             return false;
         }
-        BitmapFactory.Options bounds = new BitmapFactory.Options();
-        bounds.inJustDecodeBounds = true;
-        BitmapFactory.decodeByteArray(bytes, 0, bytes.length, bounds);
-        return bounds.outWidth > 0 && bounds.outHeight > 0;
+        return CachedMediaValidator.artwork(ImageDecoder.createSource(ByteBuffer.wrap(bytes)));
     }
 
     private static void writeArtworkAtomically(File target, byte[] bytes) throws IOException {
@@ -481,9 +465,7 @@ public final class YandexTrackCache {
             try (FileOutputStream output = new FileOutputStream(temp)) {
                 output.write(bytes);
             }
-            if (!temp.renameTo(target)) {
-                copyFile(temp, target);
-            }
+            CacheFileIntegrity.replace(temp, target);
         } finally {
             if (temp.exists() && !temp.delete()) {
                 temp.deleteOnExit();
@@ -606,17 +588,6 @@ public final class YandexTrackCache {
         }
     }
 
-    private static void copyFile(File source, File target) throws IOException {
-        try (BufferedInputStream in = new BufferedInputStream(new FileInputStream(source));
-             FileOutputStream out = new FileOutputStream(target)) {
-            byte[] buffer = new byte[128 * 1024];
-            int read;
-            while ((read = in.read(buffer)) != -1) {
-                out.write(buffer, 0, read);
-            }
-        }
-    }
-
     private static void touch(File file) {
         file.setLastModified(System.currentTimeMillis());
     }
@@ -670,10 +641,21 @@ public final class YandexTrackCache {
         }
     }
 
+    public static final class LikedSyncResult {
+        public final boolean audioDownloaded;
+        public final IOException audioFailure;
+        public final ArtworkSyncResult artwork;
+
+        LikedSyncResult(boolean audioDownloaded, IOException audioFailure, ArtworkSyncResult artwork) {
+            this.audioDownloaded = audioDownloaded;
+            this.audioFailure = audioFailure;
+            this.artwork = artwork;
+        }
+    }
+
     public enum ArtworkSyncResult {
         PRESENT,
         DOWNLOADED,
-        NOT_CACHED,
         NO_SOURCE,
         FAILED
     }
