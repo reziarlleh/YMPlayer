@@ -1,16 +1,16 @@
 {
   "schemaVersion": 1,
   "packageName": "dev.petrov.yaplay",
-  "versionCode": 113,
-  "versionName": "1.0.0-beta.13",
+  "versionCode": 114,
+  "versionName": "1.1.0",
   "minSdk": 29,
-  "publishedAt": "2026-09-08T16:00:08+05:00",
-  "releasePageUrl": "https://github.com/reziarlleh/YMPlayer/releases/tag/v1.0.0-beta.13",
-  "releaseNotes": "Исправлена ТВ-плитка. Сообщения закреплены двумя строками снизу во всех разделах. Обложка и круглые кнопки адаптируются к доступному месту, системные панели не перекрываются. Воспроизведение, кэш и функции SideBar сохранены.",
+  "publishedAt": "2026-09-08T21:19:27+05:00",
+  "releasePageUrl": "https://github.com/reziarlleh/YMPlayer/releases/tag/v1.1.0",
+  "releaseNotes": "Стабильная версия без beta. Статус-бар раскрывается в прокручиваемый журнал по нажатию. Волна клипов снова полноэкранная, без статус-бара. Название, исполнитель и альбом выровнены, на больших горизонтальных экранах метаданные крупнее. Обновлены документация и планы. Аудиодвижок, кэш и SideBar сохранены.",
   "apk": {
-    "primaryUrl": "https://github.com/reziarlleh/YMPlayer/releases/download/v1.0.0-beta.13/YMPlayer-v1.0.0-beta.13-release-b113.apk",
-    "alternativeUrl": "https://cdn.jsdelivr.net/gh/reziarlleh/YMPlayer@v1.0.0-beta.13/releases/1.0.0-beta.13/YMPlayer-v1.0.0-beta.13-release-b113.apk",
-    "sizeBytes": 15314198,
-    "sha256": "c8edaf9c23a24ff18a1b46cbaaa7d9a7e668da53bac63e90cd6b46a217685530"
+    "primaryUrl": "https://github.com/reziarlleh/YMPlayer/releases/download/v1.1.0/YMPlayer-v1.1.0-release-b114.apk",
+    "alternativeUrl": "https://cdn.jsdelivr.net/gh/reziarlleh/YMPlayer@v1.1.0/releases/1.1.0/YMPlayer-v1.1.0-release-b114.apk",
+    "sizeBytes": 15322030,
+    "sha256": "861be0c968c43dfa3bb39f82322b72c0955eea8bd8d6732d4615d9d5c365d599"
   }
 }
